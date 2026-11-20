@@ -152,7 +152,7 @@ export default function MatchedScreen() {
 
       {/* Main Content Scrollable for safety */}
       <ScrollView 
-        contentContainerStyle={{ flexGrow: 1 }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between", alignItems: "center" }}
         style={styles.contentWrap}
         scrollEnabled={Platform.OS === 'web'}
         showsVerticalScrollIndicator={false}
@@ -257,8 +257,6 @@ const styles = StyleSheet.create({
   },
   contentWrap: {
     flex: 1,
-    justifyContent: "space-between",
-    alignItems: "center",
     paddingHorizontal: 24,
     paddingTop: 20,
     paddingBottom: 40,

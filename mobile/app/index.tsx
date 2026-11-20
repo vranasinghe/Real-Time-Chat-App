@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { View, Text, Image, Pressable, Dimensions } from "react-native";
 import { router, useRootNavigationState } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { useAppStore } from "@/lib/store";
 
 const { height } = Dimensions.get("window");
@@ -8,9 +9,12 @@ const { height } = Dimensions.get("window");
 export default function SplashScreen() {
   const { session, profileSetupComplete } = useAppStore();
   const rootNavigationState = useRootNavigationState();
+  const isFocused = useIsFocused();
 
   useEffect(() => {
-    if (!rootNavigationState?.key) return;
+    // Only when this screen is visible: screens pushed on top of it (live demo,
+    // sign in, sign up) handle their own navigation after logging in.
+    if (!rootNavigationState?.key || !isFocused) return;
 
     // Auto-login logic if session exists
     if (session) {
@@ -23,7 +27,7 @@ export default function SplashScreen() {
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [session, profileSetupComplete, rootNavigationState?.key]);
+  }, [session, profileSetupComplete, rootNavigationState?.key, isFocused]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#1A0F3D" }}>
@@ -50,6 +54,24 @@ export default function SplashScreen() {
         >
           <Text className="text-white font-sans font-semibold text-[17px]">
             Get Started
+          </Text>
+        </Pressable>
+
+        {/* Live demo: real-time chat between two devices, no sign up */}
+        <Pressable
+          onPress={() => router.push("/live-demo")}
+          className="border border-white/20 active:bg-white/5 rounded-full py-4 items-center justify-center mt-4"
+          style={{ width: "72%" }}
+        >
+          <Text className="text-white/90 font-sans font-semibold text-[16px]">
+            Live Demo · Chat on 2 devices
+          </Text>
+        </Pressable>
+
+        {/* Offline demo: explore the app on this device only, no server needed */}
+        <Pressable onPress={() => router.push("/demo")} className="py-3 mt-2" hitSlop={8}>
+          <Text className="text-white/60 font-sans text-[14px] underline">
+            Offline demo (this device only)
           </Text>
         </Pressable>
       </View>

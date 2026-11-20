@@ -36,7 +36,7 @@ export default function MyProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-base">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-6" showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }} className="px-6 py-6" showsVerticalScrollIndicator={false}>
         
         {/* Profile Card Header */}
         <View className="items-center mt-6 mb-8">

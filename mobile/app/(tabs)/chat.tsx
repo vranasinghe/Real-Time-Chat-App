@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -10,8 +10,8 @@ import {
   Dimensions,
   Platform,
 } from "react-native";
-import { router } from "expo-router";
-import { useAppStore, Match } from "@/lib/store";
+import { router, useFocusEffect } from "expo-router";
+import { useAppStore, Match, Message } from "@/lib/store";
 import Animated, { FadeInDown, FadeInRight, LinearTransition } from "react-native-reanimated";
 
 const { width: SW } = Dimensions.get("window");
@@ -19,12 +19,27 @@ const { width: SW } = Dimensions.get("window");
 type FilterTab = "All" | "Unread" | "Groups";
 
 export default function ConversationsScreen() {
-  const { matches, messages, user } = useAppStore();
+  const { matches, messages, user, fetchMatches } = useAppStore();
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
 
-  const getLastMessage = (matchId: string) => {
-    const msgs = messages.filter((m) => m.match_id === matchId);
-    return msgs.length ? msgs[msgs.length - 1] : null;
+  // Live updates arrive over the socket; refreshing on focus also covers missed events
+  useFocusEffect(
+    useCallback(() => {
+      fetchMatches();
+    }, [fetchMatches])
+  );
+
+  // Server-provided last message (live backend) or the newest local one (demo / just sent)
+  const getLastMessage = (matchId: string): Message | null => {
+    const match = matches.find((m) => m.id === matchId);
+    const local = messages.filter((m) => m.match_id === matchId);
+    const newestLocal = local.length ? local[local.length - 1] : null;
+    const fromServer = match?.last_message ?? null;
+    if (!fromServer) return newestLocal;
+    if (!newestLocal) return fromServer;
+    return new Date(newestLocal.created_at).getTime() >= new Date(fromServer.created_at).getTime()
+      ? newestLocal
+      : fromServer;
   };
 
   const handleMatchClick = (match: Match) => {
@@ -58,7 +73,7 @@ export default function ConversationsScreen() {
       lastMsg: (isOutgoing ? "You: " : "") + item.last.body,
       isOnline: item.match.other_user?.is_online ?? false,
       isOutgoing,
-      unread: 0,
+      unread: item.match.unread_count ?? 0,
       time: new Date(item.last.created_at).toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",

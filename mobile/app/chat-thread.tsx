@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
   Pressable,
-  ScrollView,
+  FlatList,
+  ActivityIndicator,
   Image,
   TextInput,
   KeyboardAvoidingView,
@@ -14,7 +15,7 @@ import {
   StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import {
   ArrowLeft,
   Phone,
@@ -29,41 +30,72 @@ import {
   X,
 } from "lucide-react-native";
 import { useAppStore, Message } from "@/lib/store";
-import Animated, { FadeInUp, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeInUp } from "react-native-reanimated";
+
+const MAX_MESSAGE_LENGTH = 2000;
+
+// Confirmed messages in server order, then not-yet-confirmed ones in send order
+function orderThread(list: Message[]): Message[] {
+  const confirmed = list
+    .filter((m) => typeof m.id === "number")
+    .sort((a, b) => (a.id as number) - (b.id as number));
+  const local = list
+    .filter((m) => typeof m.id !== "number")
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  return [...confirmed, ...local];
+}
 
 export default function ChatThreadScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
-  const { matches, loadMessagesForMatch, sendMessage, user, messages } =
-    useAppStore();
+  const matches = useAppStore((s) => s.matches);
+  const allMessages = useAppStore((s) => s.messages);
+  const user = useAppStore((s) => s.user);
+  const thread = useAppStore((s) => (matchId ? s.threads[matchId] : undefined));
+  const { sendMessage, retryMessage, loadThread, loadOlderMessages, markThreadRead, setActiveThread } =
+    useAppStore.getState();
   const insets = useSafeAreaInsets();
-  const [messagesList, setMessagesList] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [showAttachmentSheet, setShowAttachmentSheet] = useState(false);
+  const listRef = useRef<FlatList<Message>>(null);
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  // Inverted list: offset 0 is the newest message
+  const scrollToNewest = () => listRef.current?.scrollToOffset({ offset: 0, animated: true });
 
   const match = matches.find((m) => m.id === matchId);
   const otherUser = match?.other_user;
+  const otherLastRead = match?.other_last_read_message_id ?? 0;
 
-  useEffect(() => {
-    if (matchId) {
-      setMessagesList(loadMessagesForMatch(matchId));
-      const socket = useAppStore.getState().getSocketConnection();
-      if (socket) socket.emit("join_room", matchId);
+  const messagesList = useMemo(
+    () => orderThread(allMessages.filter((m) => m.match_id === matchId)),
+    [allMessages, matchId]
+  );
+  // Inverted list: newest message renders at the bottom, older pages load at the top
+  const invertedData = useMemo(() => [...messagesList].reverse(), [messagesList]);
+
+  // My newest confirmed message: the one that shows "Sent" / "Seen"
+  const myLatestConfirmedId = useMemo(() => {
+    for (let i = messagesList.length - 1; i >= 0; i--) {
+      const m = messagesList[i];
+      if (m.sender_id === user?.id && typeof m.id === "number") return m.id;
     }
-    return () => {
-      if (matchId) {
-        const socket = useAppStore.getState().getSocketConnection();
-        if (socket) socket.emit("leave_room", matchId);
-      }
-    };
-  }, [matchId, loadMessagesForMatch, messages]);
+    return null;
+  }, [messagesList, user?.id]);
 
+  // While this screen is focused it is the "active thread": incoming messages
+  // here don't count as unread, and we tell the other person we've seen them.
+  useFocusEffect(
+    useCallback(() => {
+      if (!matchId) return;
+      setActiveThread(matchId);
+      loadThread(matchId);
+      return () => setActiveThread(null);
+    }, [matchId, loadThread, setActiveThread])
+  );
+
+  const newestFromOther = messagesList.length ? messagesList[messagesList.length - 1].id : null;
   useEffect(() => {
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  }, [messagesList]);
+    if (matchId) markThreadRead(matchId);
+  }, [matchId, newestFromOther, markThreadRead]);
 
   const handleGoBack = () => {
     try {
@@ -77,8 +109,9 @@ export default function ChatThreadScreen() {
     if (!text.trim() || !matchId) return;
     const bodyText = text.trim();
     setText("");
-    await sendMessage(matchId, bodyText, "text");
-    setMessagesList(loadMessagesForMatch(matchId));
+    const sending = sendMessage(matchId, bodyText, "text");
+    scrollToNewest();
+    await sending;
   };
 
   const handleAttachmentOption = (type: string) => {
@@ -95,42 +128,57 @@ export default function ChatThreadScreen() {
               : `📎 Mock ${type} attachment`,
             type === "Location" ? "location" : "text"
           );
-          setMessagesList(loadMessagesForMatch(matchId));
         },
       },
       { text: "Cancel", style: "cancel" },
     ]);
   };
 
-  const renderBubble = (msg: Message) => {
+  const statusLabel = (msg: Message): string | null => {
+    if (msg.sender_id !== user?.id) return null;
+    if (msg.status === "sending") return "Sending…";
+    if (msg.status === "failed") return "Not sent · Tap to retry";
+    if (msg.id !== myLatestConfirmedId) return null;
+    return typeof msg.id === "number" && msg.id <= otherLastRead ? "Seen" : "Sent";
+  };
+
+  const renderBubble = ({ item: msg }: { item: Message }) => {
     const isMe = msg.sender_id === user?.id;
+    const failed = msg.status === "failed";
+    const status = statusLabel(msg);
+    const time = new Date(msg.created_at).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
     return (
       <Animated.View
-        key={msg.id}
-        entering={FadeInUp.springify()}
-        layout={LinearTransition.springify()}
-        style={[
-          styles.bubbleRow,
-          isMe ? styles.bubbleRowMe : styles.bubbleRowThem,
-        ]}
+        entering={FadeInUp.duration(180)}
+        style={[styles.bubbleRow, isMe ? styles.bubbleRowMe : styles.bubbleRowThem]}
       >
-        <View
+        <Pressable
+          disabled={!failed || !msg.client_id}
+          onPress={() => msg.client_id && retryMessage(msg.client_id)}
+          accessibilityRole={failed ? "button" : undefined}
+          accessibilityLabel={failed ? "Message not sent. Tap to retry." : undefined}
           style={[
             styles.bubble,
             isMe ? styles.bubbleMe : styles.bubbleThem,
+            msg.status === "sending" && styles.bubbleSending,
+            failed && styles.bubbleFailed,
           ]}
         >
           <Text style={styles.bubbleText}>{msg.body}</Text>
-          <Text style={styles.bubbleTime}>
-            {new Date(msg.created_at).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+          <Text style={[styles.bubbleTime, failed && styles.bubbleTimeFailed]}>
+            {status ? `${time} · ${status}` : time}
           </Text>
-        </View>
+        </Pressable>
       </Animated.View>
     );
   };
+
+  const isEmpty = messagesList.length === 0;
+  const loadingFirstPage = !thread?.loaded && thread?.loading;
 
   const attachmentOptions = [
     {
@@ -235,30 +283,46 @@ export default function ChatThreadScreen() {
           </View>
         </View>
 
-        {/* Messages */}
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.messageScroll}
-          contentContainerStyle={styles.messageScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.dateLabelWrap}>
-            <View style={styles.dateLabelInner}>
-              <Text style={styles.dateLabelText}>TODAY</Text>
-            </View>
-          </View>
-
-          {messagesList.map(renderBubble)}
-
-          {messagesList.length === 0 && (
-            <View style={styles.emptyWrap}>
+        {/* Messages: inverted so the newest sits at the bottom and older pages load on scroll up */}
+        {isEmpty ? (
+          <View style={styles.emptyWrap}>
+            {loadingFirstPage ? (
+              <ActivityIndicator color="#7C5CFF" />
+            ) : (
               <Text style={styles.emptyText}>
                 You matched with {otherUser?.name}! Send the first message to
                 kick off the connection.
               </Text>
-            </View>
-          )}
-        </ScrollView>
+            )}
+          </View>
+        ) : (
+          <FlatList
+            ref={listRef}
+            inverted
+            data={invertedData}
+            keyExtractor={(m) => String(m.client_id ?? m.id)}
+            renderItem={renderBubble}
+            style={styles.messageScroll}
+            contentContainerStyle={styles.messageScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            onEndReached={() => matchId && loadOlderMessages(matchId)}
+            onEndReachedThreshold={0.3}
+            initialNumToRender={20}
+            windowSize={11}
+            ListFooterComponent={
+              thread?.loading && thread?.loaded ? (
+                <ActivityIndicator color="#7C5CFF" style={{ marginVertical: 12 }} />
+              ) : thread?.hasMore === false || !thread ? (
+                <View style={styles.dateLabelWrap}>
+                  <View style={styles.dateLabelInner}>
+                    <Text style={styles.dateLabelText}>Start of your conversation</Text>
+                  </View>
+                </View>
+              ) : null
+            }
+          />
+        )}
 
         {/* Input Bar */}
         <View style={styles.inputBar}>
@@ -279,6 +343,7 @@ export default function ChatThreadScreen() {
               value={text}
               onChangeText={setText}
               style={styles.input}
+              maxLength={MAX_MESSAGE_LENGTH}
               multiline
             />
             <Pressable
@@ -495,13 +560,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
   },
+  bubbleSending: { opacity: 0.7 },
+  bubbleFailed: {
+    backgroundColor: "rgba(255, 46, 110, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 46, 110, 0.6)",
+  },
   bubbleTime: {
     fontSize: 10,
     fontFamily: "Inter_400Regular",
     marginTop: 4,
     textAlign: "right",
-    color: "rgba(154, 143, 184, 0.7)",
+    color: "rgba(255, 255, 255, 0.65)",
   },
+  bubbleTimeFailed: { color: "#FF8FB1", fontFamily: "Inter_600SemiBold" },
 
   // Input
   inputBar: {

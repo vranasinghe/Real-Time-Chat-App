@@ -2,6 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const db = require("./db");
 const { authenticateToken } = require("./auth");
+const { emitToMatch } = require("./realtime");
 
 const router = express.Router();
 
@@ -98,6 +99,11 @@ router.post("/", authenticateToken, async (req, res) => {
               profile: otherUserResult.rows[0]
             };
           }
+
+          // Let both people know right away so the match shows up in their chat list
+          emitToMatch(req.app.get("socketio"), matchInsert.rows[0], "match_created", {
+            match_id: finalMatchId,
+          });
         }
       }
     }

@@ -1,5 +1,6 @@
 const express = require("express");
 const http = require("http");
+const path = require("path");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -11,11 +12,18 @@ const auth = require("./auth");
 const profiles = require("./profiles");
 const swipes = require("./swipes");
 const matches = require("./matches");
+const demo = require("./demo");
 
 require("dotenv").config();
 
 const app = express();
 const server = http.createServer(app);
+
+// Behind a hosting proxy (Render sets RENDER=true), trust its X-Forwarded-* headers
+// so rate limits apply per visitor instead of to everyone sharing the proxy's IP.
+if (process.env.RENDER || process.env.TRUST_PROXY) {
+  app.set("trust proxy", 1);
+}
 
 // Comma-separated list of allowed origins, e.g. "https://dateza.app,https://www.dateza.app"
 // Falls back to "*" only when unset, which should never happen in production.
@@ -34,6 +42,16 @@ const io = new Server(server, {
 app.use(helmet());
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
+
+// Static images (e.g. demo profile photos). The app runs on a different origin,
+// so allow cross-origin loading, which helmet blocks by default.
+app.use(
+  "/public",
+  express.static(path.join(__dirname, "public"), {
+    maxAge: "7d",
+    setHeaders: (res) => res.setHeader("Cross-Origin-Resource-Policy", "cross-origin"),
+  })
+);
 
 // Rate limit auth endpoints to slow down credential stuffing / brute force
 const authLimiter = rateLimit({
@@ -59,6 +77,7 @@ app.use("/api", apiLimiter);
 app.set("socketio", io);
 
 // Mount API endpoints
+app.use("/api/auth/demo", demo.router); // One-tap live demo login (DEMO_LOGIN_ENABLED=true)
 app.use("/api/auth", auth.router);
 app.use("/api/profiles", profiles);
 app.use("/api/swipes", swipes);
@@ -92,7 +111,12 @@ io.use((socket, next) => {
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id, "user:", socket.data.userId);
 
-  // Join a match chat room — only if the authenticated user is a participant
+  // Every socket joins its owner's personal room. Chat events are delivered to
+  // `user:<id>` rooms, so a client receives messages for all of its matches
+  // (including brand-new ones) without having to join per-match rooms.
+  socket.join(`user:${socket.data.userId}`);
+
+  // Legacy: per-match rooms. Kept so older clients keep working; new clients don't need them.
   socket.on("join_room", async (matchId) => {
     if (!matchId) return;
     try {

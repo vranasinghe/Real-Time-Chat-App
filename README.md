@@ -103,6 +103,14 @@ Copy variables into local `.env` files in their respective folders:
 DATABASE_URL=postgresql://user:password@hostname/dbname?sslmode=require
 PORT=5000
 JWT_SECRET=your_super_secret_key_here
+
+# Optional: one-tap Live Demo login (see "Live Demo" below). Off unless "true".
+DEMO_LOGIN_ENABLED=true
+# Optional: how long demo chat messages are kept (default 24)
+DEMO_RETENTION_HOURS=24
+# Optional: public URL of this backend, used for photos it hosts (e.g. https://api.example.com).
+# If unset, it is worked out from each request.
+PUBLIC_BASE_URL=
 ```
 
 ### Mobile App Configuration (`mobile/.env`)
@@ -113,7 +121,33 @@ EXPO_PUBLIC_BACKEND_URL=http://localhost:5000
 
 ---
 
+## 📱 Live Demo (two devices, no sign-up)
+
+With `DEMO_LOGIN_ENABLED=true` on the backend, the welcome screen shows **Live Demo · Chat on 2 devices**:
+
+1. On device 1, tap **Live Demo** and pick **Alex**.
+2. On device 2, tap **Live Demo** and pick **Elena**.
+3. Both land in the same chat and can message each other in real time.
+
+Alex and Elena are shared, pre-matched accounts created automatically on first use. They can't be logged into with a password, they never appear to real users in discovery, and their chat is trimmed to the last `DEMO_RETENTION_HOURS`. Everyone using the demo sees the same conversation, so turn it off (`DEMO_LOGIN_ENABLED` unset) once real users join.
+
+Both devices must reach the backend: deploy it, or on the same Wi-Fi set `EXPO_PUBLIC_BACKEND_URL` to your computer's LAN address (for example `http://192.168.1.15:5000`) and allow the port through your firewall.
+
+The **Offline demo** link on the welcome screen needs no server, but only works on one device with simulated replies.
+
+---
+
 ## 📦 Deployment Guides
+
+### ☁️ One-click on Render (backend + web app)
+The repo includes a [`render.yaml`](render.yaml) Blueprint that creates the API (`dateza-api`) and the web app (`dateza-web`). The database is an external [Neon](https://neon.tech) Postgres.
+
+1. Create a free Neon project and copy its connection string.
+2. Push this repo to GitHub, then in Render choose **New → Blueprint** and pick the repo.
+3. When prompted, set `DATABASE_URL` (Neon string), `EXPO_PUBLIC_BACKEND_URL` (e.g. `https://dateza-api.onrender.com`), and optionally `CORS_ORIGIN` (e.g. `https://dateza-web.onrender.com`).
+4. After the first deploy, check the real URLs Render assigned. If they differ, update those two variables and redeploy the web app.
+
+Free Render web services sleep after ~15 minutes idle, so the first request after a pause is slow.
 
 ### 🌐 Deploying the Backend (API Server)
 You can deploy the backend to host platforms like **Render**, **Railway**, or **Fly.io**:

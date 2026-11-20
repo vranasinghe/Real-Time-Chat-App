@@ -4,6 +4,10 @@ const { authenticateToken } = require("./auth");
 
 const router = express.Router();
 
+// Live demo accounts are only visible to other demo accounts, never to real users.
+// Expects the viewer's id as $1.
+const VISIBLE_TO_VIEWER = `(p.is_demo = false OR EXISTS (SELECT 1 FROM profiles viewer WHERE viewer.id = $1 AND viewer.is_demo))`;
+
 // Fetch discovery profiles for swipe feed
 router.get("/discovery", authenticateToken, async (req, res) => {
   const userId = req.user.id;
@@ -41,6 +45,7 @@ router.get("/discovery", authenticateToken, async (req, res) => {
       FROM profiles p
       WHERE p.id != $1
         AND ($2::text IS NULL OR p.gender = $2)
+        AND ${VISIBLE_TO_VIEWER}
         AND p.id NOT IN (
           SELECT swipee_id FROM swipes WHERE swiper_id = $1
         )
@@ -78,6 +83,7 @@ router.get("/likes-you", authenticateToken, async (req, res) => {
       INNER JOIN swipes s ON s.swiper_id = p.id
       WHERE s.swipee_id = $1
         AND (s.direction = 'like' OR s.direction = 'super')
+        AND ${VISIBLE_TO_VIEWER}
         AND p.id NOT IN (
           SELECT swipee_id FROM swipes WHERE swiper_id = $1
         )`,

@@ -87,3 +87,19 @@ CREATE INDEX IF NOT EXISTS idx_matches_users ON matches(user_a, user_b);
 CREATE INDEX IF NOT EXISTS idx_messages_match ON messages(match_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_gender ON profiles(gender);
 CREATE INDEX IF NOT EXISTS idx_profiles_looking_for ON profiles(looking_for);
+
+-- Live demo accounts (see demo.js) are kept out of real users' discovery
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Chat v2: idempotent sends (client-generated id), paging, read receipts
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS client_id UUID;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_id ON messages(client_id);
+CREATE INDEX IF NOT EXISTS idx_messages_match_id_desc ON messages(match_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS match_reads (
+  match_id VARCHAR(255) REFERENCES matches(id) ON DELETE CASCADE NOT NULL,
+  user_id VARCHAR(255) REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  last_read_message_id INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  PRIMARY KEY (match_id, user_id)
+);
