@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test:chat": "node test/chat.e2e.js"
+    "test:chat": "node test/chat.e2e.js",
+    "test:images": "node test/images.e2e.js",
+    "images:import": "node scripts/import-images.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

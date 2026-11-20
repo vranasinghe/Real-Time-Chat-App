@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const db = require("./db");
+const { normalizePhotoList } = require("./photoUtils");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -127,7 +128,9 @@ router.post("/login", async (req, res) => {
 
 // Route: Complete profile setup
 router.post("/complete-setup", authenticateToken, async (req, res) => {
-  const { birthdate, gender, looking_for, bio, height_cm, interests, photos, lat, lng } = req.body;
+  const { birthdate, gender, looking_for, bio, height_cm, interests, lat, lng } = req.body;
+  // Keep only photos other devices can load: our stored images or web URLs
+  const photos = normalizePhotoList(req.body.photos);
   const userId = req.user.id;
 
   if (birthdate && !isAtLeastMinAge(birthdate)) {

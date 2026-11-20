@@ -14,6 +14,16 @@ if (Platform.OS === "android" && BACKEND_URL.includes("localhost")) {
   BACKEND_URL = BACKEND_URL.replace("localhost", "10.0.2.2");
 }
 
+// Photos stored in the database come back as "/api/images/<id>"; images need a full URL
+export const resolveMediaUrl = (uri: string): string =>
+  typeof uri === "string" && uri.startsWith("/") ? `${BACKEND_URL}${uri}` : uri;
+
+// Applies resolveMediaUrl to a profile's photos (null/undefined pass through)
+function withMedia<T extends { photos?: string[] } | null | undefined>(profile: T): T {
+  if (!profile || !Array.isArray(profile.photos)) return profile;
+  return { ...profile, photos: profile.photos.map(resolveMediaUrl) };
+}
+
 // Global WebSocket reference
 let socketConnection: Socket | null = null;
 
@@ -161,6 +171,7 @@ interface AppState {
   enterDemoMode: () => Promise<void>;
   getLiveDemoStatus: () => Promise<LiveDemoStatus>;
   signInLiveDemo: (persona: string) => Promise<void>;
+  uploadPhoto: (asset: { uri: string; base64?: string | null }) => Promise<string>;
   completeSetup: (profileData: Partial<Profile>) => Promise<void>;
   signOut: () => Promise<void>;
   createQuickMatch: (profile: Profile) => Promise<{ success: boolean; error?: string }>;
@@ -251,7 +262,7 @@ export const useAppStore = create<AppState>()(
             if (res.ok) {
               const profile = await res.json();
               set({
-                user: profile,
+                user: withMedia(profile),
                 session: true,
                 profileSetupComplete: !!profile.name && !!profile.birthdate,
               });
@@ -287,7 +298,7 @@ export const useAppStore = create<AppState>()(
           });
           const data = await res.json();
           if (res.ok) {
-            set({ profiles: data as Profile[] });
+            set({ profiles: (data as Profile[]).map(withMedia) });
           }
         } catch (e) {
           console.error("Failed to fetch discovery profiles from Express:", e);
@@ -312,7 +323,7 @@ export const useAppStore = create<AppState>()(
           });
           const data = await res.json();
           if (res.ok) {
-            set({ likesYou: data as Profile[] });
+            set({ likesYou: (data as Profile[]).map(withMedia) });
           }
         } catch (e) {
           console.error("Failed to fetch likes-you profiles from Express:", e);
@@ -335,7 +346,11 @@ export const useAppStore = create<AppState>()(
             set({
               matches: matchesData.map((m) =>
                 // The open thread is being read right now
-                m.id === activeThreadId ? { ...m, unread_count: 0 } : m
+                ({
+                  ...m,
+                  other_user: withMedia(m.other_user),
+                  ...(m.id === activeThreadId ? { unread_count: 0 } : {}),
+                })
               ),
             });
           }
@@ -370,7 +385,7 @@ export const useAppStore = create<AppState>()(
 
           set({
             token: data.token,
-            user: data.user,
+            user: withMedia(data.user),
             session: true,
             profileSetupComplete: !!data.user.name && !!data.user.birthdate,
           });
@@ -423,7 +438,7 @@ export const useAppStore = create<AppState>()(
 
           set({
             token: data.token,
-            user: data.user,
+            user: withMedia(data.user),
             session: true,
             profileSetupComplete: false,
           });
@@ -503,7 +518,7 @@ export const useAppStore = create<AppState>()(
               const userObj = JSON.parse(decodeURIComponent(userStr as string));
               set({
                 token: token as string,
-                user: userObj,
+                user: withMedia(userObj),
                 session: true,
                 profileSetupComplete: !!userObj.name && !!userObj.birthdate,
               });
@@ -571,7 +586,7 @@ export const useAppStore = create<AppState>()(
           isDemo: false,
           isUsingSupabase: true,
           token: data.token,
-          user: data.user,
+          user: withMedia(data.user),
           session: true,
           profileSetupComplete: true,
           activeMatch: null,
@@ -588,6 +603,26 @@ export const useAppStore = create<AppState>()(
         await get().fetchMatches();
         get().fetchDiscoveryProfiles();
         get().fetchLikesYou();
+      },
+
+      // Uploads a picked photo to the backend, which stores it in the database.
+      // Returns a full URL to show and to save on the profile. Without a backend
+      // (offline demo) the photo stays on this device.
+      uploadPhoto: async (asset) => {
+        const { token, isUsingSupabase } = get();
+        if (!isUsingSupabase || !token) return asset.uri;
+
+        const data = asset.base64 || (asset.uri.startsWith("data:") ? asset.uri : null);
+        if (!data) throw new Error("Could not read the selected photo.");
+
+        const res = await fetch(`${BACKEND_URL}/api/images`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ data }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || `Upload failed (${res.status})`);
+        return resolveMediaUrl(body.url);
       },
 
       completeSetup: async (profileData) => {
@@ -610,7 +645,7 @@ export const useAppStore = create<AppState>()(
             if (!res.ok) throw new Error(data.error || "Profile setup update failed");
             
             set({
-              user: data.user,
+              user: withMedia(data.user),
               profileSetupComplete: true,
             });
           } catch (e) {
@@ -666,7 +701,7 @@ export const useAppStore = create<AppState>()(
               set((state) => {
                 const matchExists = state.matches.some((m) => m.id === data.id);
                 if (matchExists) return {};
-                return { matches: [data, ...state.matches] };
+                return { matches: [{ ...data, other_user: withMedia(data.other_user) }, ...state.matches] };
               });
               // Connect socket to match room
               const socket = get().getSocketConnection();
@@ -731,7 +766,7 @@ export const useAppStore = create<AppState>()(
             if (data.activeMatch) {
               set((state) => ({
                 matches: [data.activeMatch.match, ...state.matches],
-                activeMatch: data.activeMatch,
+                activeMatch: { ...data.activeMatch, profile: withMedia(data.activeMatch.profile) },
               }));
               // Connect socket to the match room
               const socket = get().getSocketConnection();

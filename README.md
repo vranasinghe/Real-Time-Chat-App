@@ -121,6 +121,16 @@ EXPO_PUBLIC_BACKEND_URL=http://localhost:5000
 
 ---
 
+## 🖼️ Images
+
+Profile photos are stored **in the database** (`images` table) and served by the API at `/api/images/<id>`, so they move with the database and don't depend on outside image hosts.
+
+- Photos picked during profile setup are uploaded (`POST /api/images`, JPEG/PNG/WebP/GIF up to 5 MB).
+- To copy existing photo links (e.g. the sample profiles' web images) into the database, run `npm run images:import` in `backend/`. It's safe to run more than once.
+- Tests: `npm run test:images` (and `npm run test:chat`) with the backend running.
+
+---
+
 ## 📱 Live Demo (two devices, no sign-up)
 
 With `DEMO_LOGIN_ENABLED=true` on the backend, the welcome screen shows **Live Demo · Chat on 2 devices**:

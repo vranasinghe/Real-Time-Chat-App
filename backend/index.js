@@ -13,6 +13,7 @@ const profiles = require("./profiles");
 const swipes = require("./swipes");
 const matches = require("./matches");
 const demo = require("./demo");
+const images = require("./images");
 
 require("dotenv").config();
 
@@ -41,6 +42,11 @@ const io = new Server(server, {
 // Configure CORS, security headers, and JSON parsing
 app.use(helmet());
 app.use(cors({ origin: corsOrigin }));
+
+// Images: mounted before the global JSON parser because uploads need a larger
+// body limit (the default is 100 KB). Has its own upload rate limit.
+app.use("/api/images", images.router);
+
 app.use(express.json());
 
 // Static images (e.g. demo profile photos). The app runs on a different origin,

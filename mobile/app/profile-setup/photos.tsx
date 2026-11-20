@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, ScrollView, Image, Alert } from "react-native";
+import { View, Text, SafeAreaView, Pressable, ScrollView, Image, Alert, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { Camera, Plus, Trash2 } from "lucide-react-native";
 import { useAppStore } from "@/lib/store";
@@ -15,29 +15,45 @@ const MOCK_GALLERY = [
 
 export default function PhotosSetupScreen() {
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
+  const uploadPhoto = useAppStore((state) => state.uploadPhoto);
 
   const handlePhotoClick = async (index: number) => {
+    if (uploadingSlot !== null) return; // one upload at a time
+
     // If photo exists in this slot, delete it
     if (uploadedPhotos[index]) {
       const newPhotos = [...uploadedPhotos];
       newPhotos.splice(index, 1);
       setUploadedPhotos(newPhotos);
-    } else {
-      // Pick photo from device gallery
-      try {
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images'],
-          allowsEditing: true,
-          quality: 0.8,
-        });
+      return;
+    }
 
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          setUploadedPhotos([...uploadedPhotos, result.assets[0].uri]);
-        }
-      } catch (error) {
-        Alert.alert("Error", "Could not pick an image from the gallery.");
-      }
+    // Pick photo from device gallery
+    let asset: ImagePicker.ImagePickerAsset | undefined;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: 0.7,
+        base64: true, // sent to the backend, which stores the photo in the database
+      });
+      if (result.canceled || !result.assets?.length) return;
+      asset = result.assets[0];
+    } catch {
+      Alert.alert("Error", "Could not pick an image from the gallery.");
+      return;
+    }
+
+    // Upload so the photo is saved online, not just on this device
+    setUploadingSlot(uploadedPhotos.length);
+    try {
+      const url = await uploadPhoto({ uri: asset.uri, base64: asset.base64 });
+      setUploadedPhotos((current) => [...current, url]);
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.message || "Could not upload this photo. Please try again.");
+    } finally {
+      setUploadingSlot(null);
     }
   };
 
@@ -93,7 +109,12 @@ export default function PhotosSetupScreen() {
                 onPress={() => handlePhotoClick(0)}
                 className="w-full h-full rounded-3xl border border-dashed border-white/10 bg-bg-surface overflow-hidden items-center justify-center relative active:opacity-90"
               >
-                {uploadedPhotos[0] ? (
+                {uploadingSlot === 0 ? (
+                  <View className="items-center">
+                    <ActivityIndicator color="#7C5CFF" />
+                    <Text className="text-text-secondary font-sans text-[12px] mt-2">Uploading…</Text>
+                  </View>
+                ) : uploadedPhotos[0] ? (
                   <>
                     <Image source={{ uri: uploadedPhotos[0] }} className="w-full h-full object-cover" />
                     <View className="absolute bottom-4 right-4 w-10 h-10 rounded-full bg-like/90 items-center justify-center">
@@ -122,7 +143,9 @@ export default function PhotosSetupScreen() {
                     onPress={() => handlePhotoClick(slotIdx)}
                     className="w-full h-full rounded-2xl border border-dashed border-white/10 bg-bg-surface overflow-hidden items-center justify-center relative active:opacity-90"
                   >
-                    {uploadedPhotos[slotIdx] ? (
+                    {uploadingSlot === slotIdx ? (
+                      <ActivityIndicator color="#7C5CFF" />
+                    ) : uploadedPhotos[slotIdx] ? (
                       <>
                         <Image source={{ uri: uploadedPhotos[slotIdx] }} className="w-full h-full object-cover" />
                         <View className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-like/90 items-center justify-center">

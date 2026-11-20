@@ -13,8 +13,11 @@ const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const fs = require("fs");
+const path = require("path");
 const db = require("./db");
 const { JWT_SECRET } = require("./auth");
+const { storeImage } = require("./images");
 
 const router = express.Router();
 
@@ -29,7 +32,7 @@ const PERSONAS = {
     bio: "Live demo account. Open the app on a second device as Elena and say hi!",
     height_cm: 180,
     interests: ["Music", "Travel", "Coffee", "Hiking"],
-    photos: ["https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&auto=format&fit=crop&q=80"],
+    photoFile: "demo/alex.jpg",
   },
   elena: {
     id: "demo-elena",
@@ -41,22 +44,30 @@ const PERSONAS = {
     bio: "Live demo account. Open the app on a second device as Alex and say hi!",
     height_cm: 168,
     interests: ["Art", "Coffee", "Photography", "Travel"],
-    // Served by this backend from public/demo/ (see index.js)
-    photos: ["/public/demo/elena.webp"],
+    photoFile: "demo/elena.webp",
   },
 };
 
 const DEMO_IDS = Object.values(PERSONAS).map((p) => p.id);
 
-// Photos stored as "/public/..." are hosted by this backend. The app needs a full
-// URL, built from how the client reached us (or PUBLIC_BASE_URL if set).
+// Demo photos ship as files in backend/public/ and are stored in the database
+// (images table) on first use. Returns "/api/images/<id>".
+const demoPhotoCache = new Map();
+async function demoPhotoUrl(persona) {
+  if (demoPhotoCache.has(persona.photoFile)) return demoPhotoCache.get(persona.photoFile);
+  const bytes = fs.readFileSync(path.join(__dirname, "public", persona.photoFile));
+  const { url } = await storeImage(bytes, { source: `file:public/${persona.photoFile}` });
+  demoPhotoCache.set(persona.photoFile, url);
+  return url;
+}
+
+// Full URL for the picker screen, built from how the client reached us
+// (or PUBLIC_BASE_URL if set)
 function baseUrl(req) {
   if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, "");
   const proto = (req.get("x-forwarded-proto") || req.protocol).split(",")[0].trim();
   return `${proto}://${req.get("host")}`;
 }
-
-const resolvePhotos = (photos, base) => photos.map((p) => (p.startsWith("/") ? base + p : p));
 
 const isEnabled = () => process.env.DEMO_LOGIN_ENABLED === "true";
 
@@ -68,7 +79,7 @@ const retentionHours = () => {
 // Creates the demo accounts if needed, keeps their profile in sync with PERSONAS,
 // removes retired demo accounts and makes sure the two personas are matched.
 // Idempotent, so it is safe to run on every demo login.
-async function ensureDemoAccounts(base) {
+async function ensureDemoAccounts() {
   // Retired personas (e.g. the old "Sam"): deleting the profile cascades to its
   // swipes, matches and messages
   await db.query("DELETE FROM profiles WHERE is_demo = true AND id <> ALL($1)", [DEMO_IDS]);
@@ -82,7 +93,7 @@ async function ensureDemoAccounts(base) {
          is_demo = true, name = EXCLUDED.name, birthdate = EXCLUDED.birthdate, gender = EXCLUDED.gender,
          looking_for = EXCLUDED.looking_for, bio = EXCLUDED.bio, height_cm = EXCLUDED.height_cm,
          interests = EXCLUDED.interests, photos = EXCLUDED.photos`,
-      [p.id, p.email, unusablePassword, p.name, p.birthdate, p.gender, p.looking_for, p.bio, p.height_cm, p.interests, resolvePhotos(p.photos, base)]
+      [p.id, p.email, unusablePassword, p.name, p.birthdate, p.gender, p.looking_for, p.bio, p.height_cm, p.interests, [await demoPhotoUrl(p)]]
     );
   }
 
@@ -115,20 +126,21 @@ async function trimDemoHistory() {
 }
 
 // Route: Is live demo available, and which accounts can be picked?
-router.get("/status", (req, res) => {
+router.get("/status", async (req, res) => {
   if (!isEnabled()) {
     return res.status(200).json({ enabled: false, personas: [] });
   }
-  const base = baseUrl(req);
-  res.status(200).json({
-    enabled: true,
-    personas: Object.entries(PERSONAS).map(([key, p]) => ({
-      key,
-      name: p.name,
-      photo: resolvePhotos(p.photos, base)[0],
-      bio: p.bio,
-    })),
-  });
+  try {
+    const base = baseUrl(req);
+    const personas = [];
+    for (const [key, p] of Object.entries(PERSONAS)) {
+      personas.push({ key, name: p.name, photo: base + (await demoPhotoUrl(p)), bio: p.bio });
+    }
+    res.status(200).json({ enabled: true, personas });
+  } catch (err) {
+    console.error("Demo status error:", err);
+    res.status(500).json({ error: "Internal server error loading live demo" });
+  }
 });
 
 // Route: Log in as a demo persona. Body: { persona: "alex" | "elena" }
@@ -143,7 +155,7 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    await ensureDemoAccounts(baseUrl(req));
+    await ensureDemoAccounts();
     await trimDemoHistory();
 
     const result = await db.query("SELECT * FROM profiles WHERE id = $1", [persona.id]);

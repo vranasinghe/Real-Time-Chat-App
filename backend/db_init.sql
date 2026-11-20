@@ -88,6 +88,17 @@ CREATE INDEX IF NOT EXISTS idx_messages_match ON messages(match_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_gender ON profiles(gender);
 CREATE INDEX IF NOT EXISTS idx_profiles_looking_for ON profiles(looking_for);
 
+-- Images stored in the database (profile photos), served at /api/images/<id>
+CREATE TABLE IF NOT EXISTS images (
+  id UUID PRIMARY KEY,
+  owner_id VARCHAR(255) REFERENCES profiles(id) ON DELETE SET NULL,
+  content_type VARCHAR(100) NOT NULL,
+  data BYTEA NOT NULL,
+  bytes INTEGER NOT NULL,
+  source VARCHAR(1000) UNIQUE, -- where an imported image came from, to avoid duplicates
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
 -- Live demo accounts (see demo.js) are kept out of real users' discovery
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT FALSE;
 
