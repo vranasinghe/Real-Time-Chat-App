@@ -1,19 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
-import {
-  View,
-  Text,
-  SafeAreaView,
-  Pressable,
-  ScrollView,
-  Image,
-  Alert,
-  StyleSheet,
-  Dimensions,
-  Modal,
-  TextInput,
-  ActivityIndicator,
-  Platform,
-} from "react-native";
+import { View, Text, Pressable, ScrollView, Image, Alert, StyleSheet, Modal, TextInput, ActivityIndicator, Platform } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import {
   Bell,
@@ -31,7 +18,6 @@ import { SwipeDeck } from "@/components/SwipeDeck";
 import { WebView } from "react-native-webview";
 import * as ImagePicker from "expo-image-picker";
 
-const { width: SW } = Dimensions.get("window");
 
 const getVideoHtml = (url: string) => `
 <!DOCTYPE html>

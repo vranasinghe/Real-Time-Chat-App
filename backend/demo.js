@@ -12,11 +12,12 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const fs = require("fs");
 const path = require("path");
 const db = require("./db");
-const { JWT_SECRET } = require("./auth");
+const config = require("./config");
+const logger = require("./logger");
+const session = require("./session");
 const { storeImage } = require("./images");
 
 const router = express.Router();
@@ -69,7 +70,7 @@ function baseUrl(req) {
   return `${proto}://${req.get("host")}`;
 }
 
-const isEnabled = () => process.env.DEMO_LOGIN_ENABLED === "true";
+const isEnabled = () => config.demoLoginEnabled;
 
 const retentionHours = () => {
   const h = parseInt(process.env.DEMO_RETENTION_HOURS, 10);
@@ -138,7 +139,7 @@ router.get("/status", async (req, res) => {
     }
     res.status(200).json({ enabled: true, personas });
   } catch (err) {
-    console.error("Demo status error:", err);
+    logger.error("demo status failed", err);
     res.status(500).json({ error: "Internal server error loading live demo" });
   }
 });
@@ -162,10 +163,9 @@ router.post("/", async (req, res) => {
     const user = result.rows[0];
     delete user.password;
 
-    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
-    res.status(200).json({ token, user });
+    session.sendSession(req, res, user);
   } catch (err) {
-    console.error("Demo login error:", err);
+    logger.error("demo login failed", err);
     res.status(500).json({ error: "Internal server error during demo login" });
   }
 });

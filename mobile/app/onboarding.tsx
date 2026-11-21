@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowRight } from "lucide-react-native";
 import { PrimaryButton, GhostButton } from "@/components/PrimaryButton";

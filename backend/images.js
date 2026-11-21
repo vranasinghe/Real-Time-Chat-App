@@ -11,11 +11,13 @@ const express = require("express");
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
 const db = require("./db");
+const logger = require("./logger");
 const { authenticateToken } = require("./auth");
 
 const router = express.Router();
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB after decoding
+const MAX_IMAGES_PER_USER = 50; // keeps one account from filling the database
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Identify the format from the file's first bytes; the client-supplied type is not trusted
@@ -34,6 +36,10 @@ async function storeImage(buffer, { ownerId = null, source = null } = {}) {
   if (buffer.length > MAX_IMAGE_BYTES) throw new Error("Image is larger than 5 MB");
   const contentType = detectImageType(buffer);
   if (!contentType) throw new Error("Only JPEG, PNG, WebP or GIF images are supported");
+  if (ownerId) {
+    const count = await db.query("SELECT COUNT(*)::int AS n FROM images WHERE owner_id = $1", [ownerId]);
+    if (count.rows[0].n >= MAX_IMAGES_PER_USER) throw new Error("Upload limit reached (too many stored photos)");
+  }
 
   const result = await db.query(
     `INSERT INTO images (id, owner_id, content_type, data, bytes, source)
@@ -55,7 +61,8 @@ const uploadLimiter = rateLimit({
 });
 
 // Route: upload an image (larger body limit than the rest of the API)
-router.post("/", uploadLimiter, express.json({ limit: "8mb" }), authenticateToken, async (req, res) => {
+// Authenticate BEFORE parsing the large body, so anonymous callers cannot make us read 8 MB
+router.post("/", uploadLimiter, authenticateToken, express.json({ limit: "8mb" }), async (req, res) => {
   const raw = typeof req.body?.data === "string" ? req.body.data : "";
   const base64 = raw.startsWith("data:") ? raw.slice(raw.indexOf(",") + 1) : raw;
   if (!base64) {
@@ -67,10 +74,10 @@ router.post("/", uploadLimiter, express.json({ limit: "8mb" }), authenticateToke
     const image = await storeImage(buffer, { ownerId: req.user.id });
     res.status(201).json(image);
   } catch (err) {
-    if (/supported|empty|larger/.test(err.message)) {
+    if (/supported|empty|larger|limit reached/.test(err.message)) {
       return res.status(400).json({ error: err.message });
     }
-    console.error("Image upload error:", err);
+    logger.error("image upload failed", err);
     res.status(500).json({ error: "Internal server error uploading image" });
   }
 });
@@ -92,7 +99,7 @@ router.get("/:id", async (req, res) => {
     });
     res.send(image.data);
   } catch (err) {
-    console.error("Image fetch error:", err);
+    logger.error("image fetch failed", err);
     res.status(500).json({ error: "Internal server error fetching image" });
   }
 });

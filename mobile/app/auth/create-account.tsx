@@ -1,5 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, ScrollView, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, Alert } from "react-native";
+import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
+import { isStrongPassword, isValidEmail } from "@/lib/validation";
+import { getAuthConfig } from "@/lib/accountApi";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useAppStore } from "@/lib/store";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -77,19 +81,16 @@ export default function CreateAccountScreen() {
   };
 
   // Quick strength validation for routing allowance
-  const isPasswordValid = (pass: string) => {
-    return (
-      pass.length >= 8 &&
-      /[A-Z]/.test(pass) &&
-      /[a-z]/.test(pass) &&
-      /[0-9]/.test(pass) &&
-      /[^A-Za-z0-9]/.test(pass)
-    );
-  };
+  const isPasswordValid = isStrongPassword;
 
   const handleSignUp = async () => {
     if (!fullName || !emailOrPhone || !password) {
       setError("Please fill in all fields");
+      return;
+    }
+
+    if (!isValidEmail(emailOrPhone)) {
+      setError("Please enter a valid email address");
       return;
     }
 
@@ -105,8 +106,9 @@ export default function CreateAccountScreen() {
       const success = await signUpStore(emailOrPhone, password, fullName);
       setLoading(false);
       if (success) {
-        // Direct to verification OTP screen
-        router.push("/auth/verify-code");
+        // Email verification only when the server can really send email
+        const { emailVerification } = await getAuthConfig();
+        router.push(emailVerification ? "/auth/verify-code" : "/profile-setup/birthday");
       } else {
         setError("Sign up failed. Please try again.");
       }
@@ -118,7 +120,8 @@ export default function CreateAccountScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-base">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-6">
+      <KeyboardAvoid>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-6">
         <View className="flex-1 justify-between">
           
           {/* Header */}
@@ -150,8 +153,8 @@ export default function CreateAccountScreen() {
             />
 
             <TextField
-              label="Email or Phone"
-              placeholder="Enter your email or phone number"
+              label="Email"
+              placeholder="Enter your email address"
               value={emailOrPhone}
               onChangeText={setEmailOrPhone}
               keyboardType="email-address"
@@ -230,6 +233,7 @@ export default function CreateAccountScreen() {
 
         </View>
       </ScrollView>
+      </KeyboardAvoid>
     </SafeAreaView>
   );
 }

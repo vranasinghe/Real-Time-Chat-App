@@ -1,48 +1,47 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, Alert, ScrollView } from "react-native";
+import { View, Text, Pressable, Alert, ScrollView } from "react-native";
+import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { TextField } from "@/components/TextField";
+import { isValidEmail } from "@/lib/validation";
+import { requestPasswordReset } from "@/lib/accountApi";
 
 export default function ForgotPasswordScreen() {
   const [emailOrPhone, setEmailOrPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSendOtp = () => {
-    if (!emailOrPhone) {
-      setError("Please enter your email or phone number");
+  const handleSendOtp = async () => {
+    if (!isValidEmail(emailOrPhone)) {
+      setError("Please enter a valid email address");
       return;
     }
     setError("");
     setLoading(true);
-
-    // Simulate OTP send
-    setTimeout(() => {
+    try {
+      await requestPasswordReset(emailOrPhone);
+      // The server answers the same whether or not the account exists
+      Alert.alert("Check your email", "If an account exists for that address, we sent a 6-digit code.", [
+        {
+          text: "OK",
+          onPress: () =>
+            router.push({ pathname: "/auth/reset-password", params: { email: emailOrPhone.trim() } }),
+        },
+      ]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not send the code.");
+    } finally {
       setLoading(false);
-      Alert.alert(
-        "OTP Sent",
-        "A verification code has been sent to your account.",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              // Redirect to verify code screen, passing reset context
-              router.push({
-                pathname: "/auth/verify-code",
-                params: { purpose: "reset" },
-              });
-            },
-          },
-        ]
-      );
-    }, 1500);
+    }
   };
 
   return (
     <SafeAreaView className="flex-1 bg-bg-base">
-      <ScrollView
+      <KeyboardAvoid>
+      <ScrollView keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }}
         className="px-6 py-6"
         showsVerticalScrollIndicator={false}
@@ -69,7 +68,7 @@ export default function ForgotPasswordScreen() {
               Forgot Password
             </Text>
             <Text className="text-text-secondary text-base font-sans leading-6">
-              Enter your email or phone number. We will send you a 4-digit verification code to reset your password.
+              Enter your email address. We will send you a 6-digit code to reset your password.
             </Text>
           </View>
 
@@ -83,8 +82,8 @@ export default function ForgotPasswordScreen() {
             ) : null}
 
             <TextField
-              label="Email or Phone"
-              placeholder="Enter your email or phone number"
+              label="Email"
+              placeholder="Enter your email address"
               value={emailOrPhone}
               onChangeText={setEmailOrPhone}
               keyboardType="email-address"
@@ -103,6 +102,7 @@ export default function ForgotPasswordScreen() {
         </View>
 
       </ScrollView>
+      </KeyboardAvoid>
     </SafeAreaView>
   );
 }

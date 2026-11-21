@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, SafeAreaView, ScrollView, Pressable, Image } from "react-native";
+import { View, Text, ScrollView, Pressable, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowLeft, MoreHorizontal, Heart, MessageSquare, UserCheck } from "lucide-react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";

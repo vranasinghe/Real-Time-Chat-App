@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, ScrollView, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, Alert } from "react-native";
+import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react-native";
 import { useAppStore } from "@/lib/store";
@@ -77,8 +79,8 @@ export default function SignInScreen() {
       const success = await signInStore(email, password);
       setLoading(false);
       if (success) {
-        // Redirect to tabs directly (fallback/mock logic auto-completes profileSetup)
-        router.replace("/(tabs)");
+        // New accounts that never finished onboarding continue the setup wizard
+        router.replace(useAppStore.getState().profileSetupComplete ? "/(tabs)" : "/profile-setup/birthday");
       } else {
         setError("Invalid email or password");
       }
@@ -90,7 +92,8 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-base">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-6">
+      <KeyboardAvoid>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-6">
         <View className="flex-1 justify-between">
           {/* Header Section */}
           <View className="mt-4 mb-8">
@@ -120,8 +123,8 @@ export default function SignInScreen() {
             ) : null}
 
             <TextField
-              label="Email or Phone"
-              placeholder="Enter your email or phone number"
+              label="Email"
+              placeholder="Enter your email address"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -196,6 +199,7 @@ export default function SignInScreen() {
           </View>
         </View>
       </ScrollView>
+      </KeyboardAvoid>
     </SafeAreaView>
   );
 }

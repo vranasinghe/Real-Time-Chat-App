@@ -1,39 +1,86 @@
 const { Pool } = require("pg");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+const config = require("./config");
+const logger = require("./logger");
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  console.warn("WARNING: DATABASE_URL environment variable is not defined. Please configure it in your deployment dashboard (Railway, Render, etc.).");
-}
+const connectionString = config.databaseUrl;
 
+// SSL: Neon and most hosted Postgres put `sslmode=require` in the URL, which pg honours.
+// Supabase poolers need relaxed verification.
 const pool = new Pool({
   connectionString: connectionString,
   ssl: connectionString && (connectionString.includes("supabase.co") || connectionString.includes("supabase.com"))
     ? { rejectUnauthorized: false }
-    : false
+    : undefined,
+  max: parseInt(process.env.PG_POOL_MAX, 10) || 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 pool.on("error", (err) => {
-  console.error("Unexpected error on idle database client:", err);
+  logger.error("unexpected error on idle database client", err);
 });
 
 const bcrypt = require("bcryptjs");
 
-const initDb = async () => {
+// Runs the SQL files in migrations/ that have not been applied yet, in name order, each in
+// its own transaction, and records them in schema_migrations. Never edit an applied file:
+// add a new one.
+const runMigrations = async () => {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS schema_migrations (
+       name TEXT PRIMARY KEY,
+       applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+     )`
+  );
+  const dir = path.join(__dirname, "migrations");
+  if (!fs.existsSync(dir)) return;
+  const applied = new Set((await pool.query("SELECT name FROM schema_migrations")).rows.map((r) => r.name));
+  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
+    if (applied.has(file)) continue;
+    await withTransaction(async (q) => {
+      await q(fs.readFileSync(path.join(dir, file), "utf8"));
+      await q("INSERT INTO schema_migrations (name) VALUES ($1)", [file]);
+    });
+    logger.info("migration applied", { file });
+  }
+};
+
+// Runs fn(query) in one transaction: commits if it resolves, rolls back if it throws.
+async function withTransaction(fn) {
+  const client = await pool.connect();
   try {
+    await client.query("BEGIN");
+    const result = await fn((text, params) => client.query(text, params));
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* connection already broken */
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Creates / upgrades tables. Throws on failure so the server never starts half-working
+// (callers retry, then exit).
+const initDb = async () => {
+  {
     const sqlPath = path.join(__dirname, "db_init.sql");
     const sql = fs.readFileSync(sqlPath, "utf8");
     await pool.query(sql);
-    console.log("Database tables verified/created successfully.");
-    if (process.env.NODE_ENV === "production") {
-      console.log("Production environment detected — skipping mock profile seeding.");
+    await runMigrations();
+    logger.info("database tables verified/created");
+    if (config.isProduction) {
+      logger.info("production environment: skipping mock profile seeding");
     } else {
       await seedMockProfiles();
     }
-  } catch (err) {
-    console.error("Database initialization failed:", err);
   }
 };
 
@@ -45,7 +92,7 @@ const seedMockProfiles = async () => {
       return;
     }
 
-    console.log("Seeding initial mock profiles into database...");
+    logger.info("seeding initial mock profiles");
     const mockProfiles = [
       {
         id: "seed-liana",
@@ -215,14 +262,17 @@ const seedMockProfiles = async () => {
         [p.id, p.email, passwordHash, p.name, p.birthdate, p.gender, p.looking_for, p.bio, p.height_cm, p.interests, p.photos, p.is_online]
       );
     }
-    console.log("Mock profiles seeded successfully.");
+    logger.info("mock profiles seeded");
   } catch (err) {
-    console.error("Seeding profiles failed:", err);
+    logger.error("seeding profiles failed", err);
   }
 };
 
 module.exports = {
   query: (text, params) => pool.query(text, params),
   pool,
-  initDb
+  initDb,
+  withTransaction,
+  close: () => pool.end(),
+  ping: () => pool.query("SELECT 1"),
 };

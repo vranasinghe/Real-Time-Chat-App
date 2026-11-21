@@ -4,6 +4,42 @@ Dateza is a modern, full-stack, real-time dating application featuring matching,
 
 ---
 
+## Architecture at a glance
+
+One backend, one database, one login system for every client:
+
+```text
+Web (Vercel, Expo web)   Android / iOS (Expo EAS)
+        |  /api/* same-origin (cookie)    |  Bearer token (SecureStore)
+        |  rewritten by Vercel            |
+        +----------------+----------------+
+                         v  HTTPS / WSS
+              Node + Express + Socket.IO (Render)
+                         v
+                  PostgreSQL (Neon)
+```
+
+Docs: [Auth and deployment](docs/AUTH_AND_DEPLOYMENT.md) | [Audit and fixes](docs/AUDIT_AND_FIXES.md) | [Security review](docs/SECURITY_REVIEW.md) | [Testing and manual checklists](docs/TESTING_CHECKLIST.md)
+
+Quick start: copy `backend/.env.example` to `backend/.env` and `mobile/.env.example` to `mobile/.env`, then `npm run dev:backend` and `npm run dev:mobile`. Tests: `cd backend && npm test`; with a database, `node scripts/test-db.js start` and `TEST_DATABASE_URL=... npm run test:integration`.
+
+## Status (what is and is not verified)
+
+| Criterion | Status |
+|---|---|
+| Web build succeeds, sign-in/sign-up pages render at phone and desktop widths | Verified locally (browser pane) |
+| Real backend auth (sign-up, login, wrong password, session restore, logout, revocation, CSRF) | Verified by automated integration tests on a real local PostgreSQL |
+| Web <-> phone messaging, two devices, persistence, duplicate prevention, presence | Verified by automated integration tests (real sockets, simulated clients). **Not** verified on real browsers + a real Android device |
+| Profile image upload and retrieval | Verified by integration tests (API). Picker on devices not tested |
+| No unintended production mock auth | Code removed/guarded; verified in tests. Production not re-checked after the changes (not deployed) |
+| Secrets not exposed | Reviewed; client bundle contains only the public backend URL |
+| Android APK installs, launches, logs in against production | **Not done** (needs an Expo account and a device) |
+| iOS | **Not done / not verified** |
+| Vercel proxy forwards the session cookie | **Not verified** until deployed |
+| Email verification / password reset delivery | **Not verified** (no email provider configured) |
+| Production deployment of these changes | **Not done**: nothing is committed or deployed |
+
+
 ## 🚀 Key Features
 
 * **⚡ Real-Time Chatting:** Powered by `Socket.io` WebSockets for instant message delivery, online indicators, and typing notifications.

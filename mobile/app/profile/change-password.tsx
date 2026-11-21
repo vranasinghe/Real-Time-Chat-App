@@ -1,5 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, ScrollView, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, Alert } from "react-native";
+import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
+import { isStrongPassword } from "@/lib/validation";
+import { useAppStore } from "@/lib/store";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -13,17 +17,10 @@ export default function ChangePasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const isPasswordValid = (pass: string) => {
-    return (
-      pass.length >= 8 &&
-      /[A-Z]/.test(pass) &&
-      /[a-z]/.test(pass) &&
-      /[0-9]/.test(pass) &&
-      /[^A-Za-z0-9]/.test(pass)
-    );
-  };
+  const isPasswordValid = isStrongPassword;
+  const changePassword = useAppStore((state) => state.changePassword);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       setError("Please fill in all fields");
       return;
@@ -42,18 +39,22 @@ export default function ChangePasswordScreen() {
     setError("");
     setLoading(true);
 
-    // Simulate password change API
-    setTimeout(() => {
-      setLoading(false);
-      Alert.alert("Success", "Password changed successfully!", [
-        { text: "OK", onPress: () => router.back() }
+    try {
+      await changePassword(currentPassword, newPassword);
+      Alert.alert("Success", "Password changed. Your other devices have been signed out.", [
+        { text: "OK", onPress: () => router.back() },
       ]);
-    }, 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not change the password.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <SafeAreaView className="flex-1 bg-bg-base">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-6" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoid>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-6" showsVerticalScrollIndicator={false}>
         
         {/* Navigation Header */}
         <View className="w-full flex-row items-center mb-6">
@@ -127,6 +128,7 @@ export default function ChangePasswordScreen() {
         </View>
 
       </ScrollView>
+      </KeyboardAvoid>
     </SafeAreaView>
   );
 }

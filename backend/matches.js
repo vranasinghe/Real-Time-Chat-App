@@ -1,6 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const db = require("./db");
+const logger = require("./logger");
 const { authenticateToken } = require("./auth");
 const { emitToMatch } = require("./realtime");
 
@@ -78,7 +79,7 @@ async function listConversations(req, res) {
 
     res.status(200).json(result.rows);
   } catch (err) {
-    console.error("Get conversations error:", err);
+    logger.error("Get conversations error:", err);
     res.status(500).json({ error: "Internal server error fetching conversations" });
   }
 }
@@ -145,7 +146,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     res.status(200).json(matchResponse);
   } catch (err) {
-    console.error("Create quick match error:", err);
+    logger.error("Create quick match error:", err);
     res.status(500).json({ error: "Internal server error creating match" });
   }
 });
@@ -181,7 +182,7 @@ router.get("/:matchId/messages", authenticateToken, async (req, res) => {
 
     res.status(200).json(result.rows);
   } catch (err) {
-    console.error("Get messages error:", err);
+    logger.error("Get messages error:", err);
     res.status(500).json({ error: "Internal server error fetching messages" });
   }
 });
@@ -239,7 +240,7 @@ router.post("/:matchId/messages", authenticateToken, async (req, res) => {
 
     res.status(201).json(newMessage);
   } catch (err) {
-    console.error("Post message error:", err);
+    logger.error("Post message error:", err);
     res.status(500).json({ error: "Internal server error posting message" });
   }
 });
@@ -284,7 +285,7 @@ router.post("/:matchId/read", authenticateToken, async (req, res) => {
 
     res.status(200).json({ match_id: matchId, last_read_message_id: lastRead });
   } catch (err) {
-    console.error("Mark read error:", err);
+    logger.error("Mark read error:", err);
     res.status(500).json({ error: "Internal server error marking messages read" });
   }
 });
@@ -348,7 +349,7 @@ router.post("/quick", authenticateToken, async (req, res) => {
 
     res.status(200).json(matchObj);
   } catch (err) {
-    console.error("Create quick match error:", err);
+    logger.error("Create quick match error:", err);
     res.status(500).json({ error: "Internal server error creating match" });
   }
 });

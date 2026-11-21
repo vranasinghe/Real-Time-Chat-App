@@ -1,20 +1,10 @@
 import React, { useCallback, useState } from "react";
-import {
-  View,
-  Text,
-  SafeAreaView,
-  Pressable,
-  ScrollView,
-  Image,
-  StyleSheet,
-  Dimensions,
-  Platform,
-} from "react-native";
+import { View, Text, Pressable, ScrollView, Image, StyleSheet, Platform } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { useAppStore, Match, Message } from "@/lib/store";
 import Animated, { FadeInDown, FadeInRight, LinearTransition } from "react-native-reanimated";
 
-const { width: SW } = Dimensions.get("window");
 
 type FilterTab = "All" | "Unread" | "Groups";
 

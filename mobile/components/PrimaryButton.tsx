@@ -14,6 +14,9 @@ export function PrimaryButton({ label, loading, icon, disabled, ...props }: Butt
       className={`w-full bg-primary active:bg-primary-pressed rounded-[28px] py-4 px-6 items-center justify-center flex-row shadow-lg ${
         disabled ? "opacity-50" : "opacity-100"
       }`}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
       {...props}
     >
       {loading ? (
@@ -37,6 +40,9 @@ export function GhostButton({ label, loading, icon, disabled, ...props }: Button
       className={`w-full border border-primary active:bg-primary/10 rounded-[28px] py-4 px-6 items-center justify-center flex-row ${
         disabled ? "opacity-50" : "opacity-100"
       }`}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
       {...props}
     >
       {loading ? (

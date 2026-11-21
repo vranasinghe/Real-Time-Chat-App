@@ -1,0 +1,29 @@
+// Password hashing. New hashes use bcrypt cost 12. Existing hashes (any cost) keep
+// verifying, and are upgraded to the current cost the next time that user logs in.
+
+const bcrypt = require("bcryptjs");
+
+const COST = 12;
+const MIN_LENGTH = 8;
+const MAX_LENGTH = 72; // bcrypt ignores anything after 72 bytes
+
+const hashPassword = (password) => bcrypt.hash(password, COST);
+
+const needsRehash = (hash) => {
+  try {
+    return bcrypt.getRounds(hash) < COST;
+  } catch {
+    return false;
+  }
+};
+
+/** Returns an error message, or null when the password is acceptable. */
+function passwordProblem(password) {
+  if (typeof password !== "string" || password.length < MIN_LENGTH) {
+    return `Password must be at least ${MIN_LENGTH} characters long`;
+  }
+  if (password.length > MAX_LENGTH) return `Password must be at most ${MAX_LENGTH} characters long`;
+  return null;
+}
+
+module.exports = { COST, MIN_LENGTH, MAX_LENGTH, hashPassword, needsRehash, passwordProblem };

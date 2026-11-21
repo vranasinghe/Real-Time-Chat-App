@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, ScrollView, Image, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, Image, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { User, Edit, Bell, Globe, LogOut, Key, ArrowRight, HelpCircle, FileText } from "lucide-react-native";
 import { useAppStore } from "@/lib/store";

@@ -8,7 +8,12 @@
     "scheme": "dateza",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.dateza.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +23,11 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "package": "com.dateza.app",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "INTERNET",
+        "READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "output": "static",
@@ -36,7 +45,14 @@
       ],
       "expo-secure-store",
       "expo-font",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Dateza needs access to your photos so you can choose profile pictures.",
+          "cameraPermission": "Dateza needs the camera so you can take profile pictures."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

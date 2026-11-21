@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, SafeAreaView, Pressable, Alert, ScrollView } from "react-native";
+import { View, Text, Pressable, Alert, ScrollView } from "react-native";
+import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { OtpInput } from "@/components/OtpInput";
+import { ApiError } from "@/lib/api";
+import { confirmEmailCode, requestEmailCode } from "@/lib/accountApi";
+
+const RESEND_SECONDS = 60;
 
 export default function VerifyCodeScreen() {
-  const { purpose } = useLocalSearchParams<{ purpose?: string }>();
   const [code, setCode] = useState("");
-  const [countdown, setCountdown] = useState(56);
+  const [countdown, setCountdown] = useState(RESEND_SECONDS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
 
   // Countdown timer logic
   useEffect(() => {
@@ -21,35 +27,53 @@ export default function VerifyCodeScreen() {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  const handleConfirm = () => {
-    if (code.length < 4) {
-      setError("Please enter the complete 4-digit code");
+  const sendCode = async (isResend: boolean) => {
+    setError("");
+    try {
+      await requestEmailCode();
+      setInfo(isResend ? "A new code is on its way." : "We emailed you a 6-digit code.");
+      setCountdown(RESEND_SECONDS);
+    } catch (e) {
+      // 429 = a code was sent a moment ago (e.g. screen reopened): that is fine
+      if (e instanceof ApiError && e.status === 429) {
+        setInfo("A code was already sent. Check your email.");
+      } else {
+        setError(e instanceof Error ? e.message : "Could not send the code.");
+      }
+    }
+  };
+
+  useEffect(() => {
+    void sendCode(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConfirm = async () => {
+    if (code.length < 6) {
+      setError("Please enter the complete 6-digit code");
       return;
     }
-
     setError("");
     setLoading(true);
-
-    // Simulate OTP verification
-    setTimeout(() => {
+    try {
+      await confirmEmailCode(code);
+      router.replace("/profile-setup/birthday");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not verify the code.");
+    } finally {
       setLoading(false);
-      if (purpose === "reset") {
-        router.push("/auth/reset-password");
-      } else {
-        router.push("/profile-setup/birthday");
-      }
-    }, 1500);
+    }
   };
 
   const handleResend = () => {
     if (countdown > 0) return;
-    setCountdown(56);
-    Alert.alert("Code Sent", "A new 4-digit verification code has been sent.");
+    void sendCode(true);
   };
 
   return (
     <SafeAreaView className="flex-1 bg-bg-base">
-      <ScrollView
+      <KeyboardAvoid>
+      <ScrollView keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }}
         className="px-6 py-6"
         showsVerticalScrollIndicator={false}
@@ -76,7 +100,7 @@ export default function VerifyCodeScreen() {
               Verify Code
             </Text>
             <Text className="text-text-secondary text-base font-sans leading-6">
-              Enter the 4-digit code sent to your account to verify your identity.
+              Enter the 6-digit code we emailed you to confirm your address.
             </Text>
           </View>
 
@@ -89,7 +113,11 @@ export default function VerifyCodeScreen() {
               </View>
             ) : null}
 
-            <OtpInput codeLength={4} onCodeChanged={setCode} />
+            {info && !error ? (
+              <Text className="text-text-secondary font-sans text-[14px] mb-4 text-center">{info}</Text>
+            ) : null}
+
+            <OtpInput codeLength={6} onCodeChanged={setCode} />
 
             {/* Countdown / Resend Option */}
             <View className="mt-8 flex-row items-center justify-center">
@@ -116,9 +144,13 @@ export default function VerifyCodeScreen() {
             onPress={handleConfirm}
             loading={loading}
           />
+          <Pressable onPress={() => router.replace("/profile-setup/birthday")} className="py-4 items-center" accessibilityRole="button">
+            <Text className="text-text-secondary font-sans text-[14px] underline">Verify later</Text>
+          </Pressable>
         </View>
 
       </ScrollView>
+      </KeyboardAvoid>
     </SafeAreaView>
   );
 }

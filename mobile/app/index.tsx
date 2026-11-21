@@ -3,18 +3,19 @@ import { View, Text, Image, Pressable, Dimensions } from "react-native";
 import { router, useRootNavigationState } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { useAppStore } from "@/lib/store";
+import { CONFIG_ERROR } from "@/lib/config";
 
 const { height } = Dimensions.get("window");
 
 export default function SplashScreen() {
-  const { session, profileSetupComplete } = useAppStore();
+  const { session, profileSetupComplete, isInitialized } = useAppStore();
   const rootNavigationState = useRootNavigationState();
   const isFocused = useIsFocused();
 
   useEffect(() => {
     // Only when this screen is visible: screens pushed on top of it (live demo,
     // sign in, sign up) handle their own navigation after logging in.
-    if (!rootNavigationState?.key || !isFocused) return;
+    if (!rootNavigationState?.key || !isFocused || !isInitialized) return;
 
     // Auto-login logic if session exists
     if (session) {
@@ -27,7 +28,7 @@ export default function SplashScreen() {
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [session, profileSetupComplete, rootNavigationState?.key, isFocused]);
+  }, [session, profileSetupComplete, isInitialized, rootNavigationState?.key, isFocused]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#1A0F3D" }}>
@@ -45,6 +46,12 @@ export default function SplashScreen() {
             Meaningful connections, made simple.
           </Text>
         </View>
+
+        {CONFIG_ERROR ? (
+          <Text className="text-red-300 text-center text-[13px] mt-6 px-4" accessibilityRole="alert">
+            {CONFIG_ERROR}
+          </Text>
+        ) : null}
 
         {/* Centered Action Button */}
         <Pressable

@@ -1,11 +1,13 @@
 import "../global.css";
 import React, { useEffect } from "react";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
+import { AppState } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import { useAppStore } from "@/lib/store";
+import { ResponsiveFrame } from "@/components/common/ResponsiveFrame";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import {
@@ -35,6 +37,12 @@ const CustomPurpleTheme = {
 
 export default function RootLayout() {
   const initializeStore = useAppStore((state) => state.initializeStore);
+  const resumeConnection = useAppStore((state) => state.resumeConnection);
+  const session = useAppStore((state) => state.session);
+  const isInitialized = useAppStore((state) => state.isInitialized);
+  const segments = useSegments();
+  const navState = useRootNavigationState();
+  const router = useRouter();
 
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_700Bold,
@@ -59,11 +67,29 @@ export default function RootLayout() {
     init();
   }, [fontsLoaded]);
 
+  // App returns to the foreground (or the browser tab becomes visible): reconnect + catch up
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") void resumeConnection();
+    });
+    return () => sub.remove();
+  }, [resumeConnection]);
+
+  // Route protection on the client. (The backend independently rejects unauthenticated
+  // API calls; this only keeps signed-out users off signed-in screens.)
+  useEffect(() => {
+    if (!navState?.key || !isInitialized || session) return;
+    const first = String(segments[0] ?? "");
+    const publicRoots = ["", "index", "onboarding", "auth", "live-demo", "demo", "auth-callback", "+not-found"];
+    if (!publicRoots.includes(first)) router.replace("/");
+  }, [navState?.key, isInitialized, session, segments, router]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider value={CustomPurpleTheme}>
           <StatusBar style="light" />
+          <ResponsiveFrame>
           <Stack
             screenOptions={{
               headerShown: false,
@@ -71,6 +97,7 @@ export default function RootLayout() {
               animation: "fade_from_bottom",
             }}
           />
+          </ResponsiveFrame>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

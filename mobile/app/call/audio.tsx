@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, SafeAreaView, Pressable, Image } from "react-native";
+import { View, Text, Pressable, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { MicOff, Volume2, PhoneOff, User } from "lucide-react-native";
 

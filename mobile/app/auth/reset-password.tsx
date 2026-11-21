@@ -1,39 +1,44 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, ScrollView } from "react-native";
-import { router } from "expo-router";
+import { View, Text, ScrollView } from "react-native";
+import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
+import { isStrongPassword } from "@/lib/validation";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { router, useLocalSearchParams } from "expo-router";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { TextField } from "@/components/TextField";
+import { OtpInput } from "@/components/OtpInput";
+import { confirmPasswordReset } from "@/lib/accountApi";
 import { PasswordStrengthChecklist } from "@/components/PasswordStrengthChecklist";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 
 export default function ResetPasswordScreen() {
+  const { email } = useLocalSearchParams<{ email?: string }>();
+  const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  const isPasswordValid = (pass: string) => {
-    return (
-      pass.length >= 8 &&
-      /[A-Z]/.test(pass) &&
-      /[a-z]/.test(pass) &&
-      /[0-9]/.test(pass) &&
-      /[^A-Za-z0-9]/.test(pass)
-    );
-  };
+  const isPasswordValid = isStrongPassword;
 
-  const handleResetPassword = () => {
+  const handleResetPassword = async () => {
+    if (!email) {
+      setError("Start again from Forgot Password");
+      return;
+    }
+    if (code.length < 6) {
+      setError("Enter the 6-digit code from your email");
+      return;
+    }
     if (!password || !confirmPassword) {
       setError("Please fill in all fields");
       return;
     }
-
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
-
     if (!isPasswordValid(password)) {
       setError("Password does not meet strength requirements");
       return;
@@ -41,12 +46,14 @@ export default function ResetPasswordScreen() {
 
     setError("");
     setLoading(true);
-
-    // Simulate password reset API
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await confirmPasswordReset(email, code, password);
       setShowSuccessModal(true);
-    }, 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not reset the password.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleModalConfirm = () => {
@@ -57,7 +64,8 @@ export default function ResetPasswordScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-base">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-6">
+      <KeyboardAvoid>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-6">
         <View className="flex-1 justify-between">
           
           {/* Header */}
@@ -66,7 +74,7 @@ export default function ResetPasswordScreen() {
               Set New Password
             </Text>
             <Text className="text-text-secondary text-base font-sans leading-6">
-              Create a new password that is secure and meets the requirements.
+              Enter the code we emailed you and choose a new password. Other devices will be signed out.
             </Text>
           </View>
 
@@ -79,6 +87,11 @@ export default function ResetPasswordScreen() {
                 </Text>
               </View>
             ) : null}
+
+            <Text className="text-text-secondary font-sans font-medium text-[14px] mb-2">Verification code</Text>
+            <View className="items-center mb-6">
+              <OtpInput codeLength={6} onCodeChanged={setCode} />
+            </View>
 
             <TextField
               label="New Password"
@@ -124,6 +137,7 @@ export default function ResetPasswordScreen() {
 
         </View>
       </ScrollView>
+      </KeyboardAvoid>
     </SafeAreaView>
   );
 }

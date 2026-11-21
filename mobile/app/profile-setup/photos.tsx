@@ -1,17 +1,11 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, ScrollView, Image, Alert, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, Image, Alert, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Camera, Plus, Trash2 } from "lucide-react-native";
 import { useAppStore } from "@/lib/store";
 import { PrimaryButton, GhostButton } from "@/components/PrimaryButton";
-import * as ImagePicker from "expo-image-picker";
-
-const MOCK_GALLERY = [
-  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600&auto=format&fit=crop&q=80"
-];
+import { pickProfileImage } from "@/lib/imagePicker";
 
 export default function PhotosSetupScreen() {
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
@@ -29,21 +23,15 @@ export default function PhotosSetupScreen() {
       return;
     }
 
-    // Pick photo from device gallery
-    let asset: ImagePicker.ImagePickerAsset | undefined;
+    // Pick photo from device gallery (same validation on web and native)
+    let asset;
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        quality: 0.7,
-        base64: true, // sent to the backend, which stores the photo in the database
-      });
-      if (result.canceled || !result.assets?.length) return;
-      asset = result.assets[0];
-    } catch {
-      Alert.alert("Error", "Could not pick an image from the gallery.");
+      asset = await pickProfileImage();
+    } catch (e: any) {
+      Alert.alert("Can't use that photo", e?.message || "Could not pick an image from the gallery.");
       return;
     }
+    if (!asset) return;
 
     // Upload so the photo is saved online, not just on this device
     setUploadingSlot(uploadedPhotos.length);
@@ -73,8 +61,7 @@ export default function PhotosSetupScreen() {
   };
 
   const saveAndContinue = () => {
-    // Fill up to 4 if empty for demo purposes
-    const finalPhotos = uploadedPhotos.length > 0 ? uploadedPhotos : MOCK_GALLERY;
+    const finalPhotos = uploadedPhotos;
 
     useAppStore.setState((state) => {
       if (state.user) {

@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, ScrollView, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, Alert } from "react-native";
+import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Calendar } from "lucide-react-native";
 import { useAppStore } from "@/lib/store";
@@ -55,7 +57,8 @@ export default function BirthdaySetupScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg-base">
-      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }} className="px-6 py-6">
+      <KeyboardAvoid>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }} className="px-6 py-6">
         <View className="w-full">
           
           {/* Header */}
@@ -134,6 +137,7 @@ export default function BirthdaySetupScreen() {
         </View>
 
       </ScrollView>
+      </KeyboardAvoid>
     </SafeAreaView>
   );
 }

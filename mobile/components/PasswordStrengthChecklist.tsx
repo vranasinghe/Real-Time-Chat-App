@@ -1,39 +1,14 @@
 import React from "react";
 import { View, Text } from "react-native";
 import { Check, Circle } from "lucide-react-native";
+import { passwordChecks } from "@/lib/validation";
 
 interface PasswordStrengthChecklistProps {
   password?: string;
 }
 
 export function PasswordStrengthChecklist({ password = "" }: PasswordStrengthChecklistProps) {
-  const checks = [
-    {
-      id: "length",
-      label: "Minimum 8 characters",
-      satisfied: password.length >= 8,
-    },
-    {
-      id: "case",
-      label: "Uppercase and lowercase character",
-      satisfied: /[A-Z]/.test(password) && /[a-z]/.test(password),
-    },
-    {
-      id: "symbolNum",
-      label: "Minimum 1 number and symbol",
-      satisfied: /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password),
-    },
-    {
-      id: "strong",
-      label: "Strong Password",
-      satisfied:
-        password.length >= 8 &&
-        /[A-Z]/.test(password) &&
-        /[a-z]/.test(password) &&
-        /[0-9]/.test(password) &&
-        /[^A-Za-z0-9]/.test(password),
-    },
-  ];
+  const checks = passwordChecks(password);
 
   return (
     <View className="bg-bg-surface border border-text-secondary/10 rounded-2xl p-4 w-full mb-6">

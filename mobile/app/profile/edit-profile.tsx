@@ -1,20 +1,39 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, ScrollView, Image, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, Image, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowLeft, Camera, User } from "lucide-react-native";
 import { useAppStore } from "@/lib/store";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { TextField } from "@/components/TextField";
+import { pickProfileImage } from "@/lib/imagePicker";
 
 export default function EditProfileScreen() {
-  const { user, completeSetup } = useAppStore();
+  const { user, completeSetup, uploadPhoto } = useAppStore();
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [name, setName] = useState(user?.name || "");
   const [bio, setBio] = useState(user?.bio || "");
-  const [email, setEmail] = useState("user@dateza.com");
+  const [email, setEmail] = useState(user?.email || "");
   const [phone, setPhone] = useState("+1 (555) 019-2834");
   const [gender, setGender] = useState(user?.gender || "male");
   const [lookingFor, setLookingFor] = useState(user?.looking_for || "female");
   const [loading, setLoading] = useState(false);
+
+  const handleChangePhoto = async () => {
+    if (photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      const asset = await pickProfileImage();
+      if (!asset) return;
+      const url = await uploadPhoto({ uri: asset.uri, base64: asset.base64 });
+      // The new photo becomes the main one; the rest keep their order
+      await completeSetup({ photos: [url, ...(user?.photos ?? []).filter((p) => p !== url)] });
+    } catch (e: any) {
+      Alert.alert("Could not change photo", e?.message || "Please try again.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -74,7 +93,10 @@ export default function EditProfileScreen() {
             )}
           </View>
           <Pressable
-            onPress={() => Alert.alert("Change Photo", "Profile photo upload triggered.")}
+            onPress={handleChangePhoto}
+            disabled={photoBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Change profile photo"
             className="absolute bottom-0 w-8 h-8 rounded-full bg-primary border border-bg-base items-center justify-center active:scale-95"
           >
             <Camera size={14} color="#FFFFFF" />

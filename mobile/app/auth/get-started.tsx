@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, SafeAreaView, Pressable, Alert, ScrollView } from "react-native";
+import { View, Text, Pressable, Alert, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useAppStore } from "@/lib/store";
 import { PrimaryButton } from "@/components/PrimaryButton";

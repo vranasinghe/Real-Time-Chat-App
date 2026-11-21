@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, SafeAreaView, Pressable, ScrollView, TextInput, Image, Modal, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, Image, Modal, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Search, X, Heart, MessageSquare, Compass } from "lucide-react-native";
 import { useAppStore, Profile } from "@/lib/store";

@@ -17,7 +17,7 @@ const TABS = [
 
 export function BottomTabBar({ currentTab, onTabPress }: CustomTabBarProps) {
   return (
-    <View style={styles.bar}>
+    <View style={styles.bar} accessibilityRole="tablist">
       {TABS.map((tab) => {
         const isActive = currentTab === tab.name;
         return (
@@ -25,6 +25,9 @@ export function BottomTabBar({ currentTab, onTabPress }: CustomTabBarProps) {
             key={tab.name}
             onPress={() => onTabPress(tab.name)}
             style={styles.tabBtn}
+            accessibilityRole="tab"
+            accessibilityLabel={tab.name === "home" ? "Home" : tab.name[0].toUpperCase() + tab.name.slice(1)}
+            accessibilityState={{ selected: isActive }}
           >
             <View
               style={[

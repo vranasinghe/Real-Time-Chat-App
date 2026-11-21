@@ -33,10 +33,17 @@ export function TextField({
           placeholderTextColor="#9A8FB8"
           secureTextEntry={isPassword ? !showPassword : secureTextEntry}
           className="flex-1 text-white font-sans text-[16px] p-0"
+          accessibilityLabel={label}
           {...props}
         />
         {isPassword ? (
-          <Pressable onPress={() => setShowPassword(!showPassword)} className="ml-2">
+          <Pressable
+            onPress={() => setShowPassword(!showPassword)}
+            className="ml-2"
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+            hitSlop={8}
+          >
             {showPassword ? (
               <EyeOff size={20} color="#9A8FB8" />
             ) : (
@@ -48,7 +55,7 @@ export function TextField({
         ) : null}
       </View>
       {error ? (
-        <Text className="text-like font-sans text-[12px] mt-1.5 ml-1">
+        <Text accessibilityRole="alert" className="text-like font-sans text-[12px] mt-1.5 ml-1">
           {error}
         </Text>
       ) : null}

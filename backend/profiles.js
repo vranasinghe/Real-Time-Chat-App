@@ -1,5 +1,6 @@
 const express = require("express");
 const db = require("./db");
+const logger = require("./logger");
 const { authenticateToken } = require("./auth");
 
 const router = express.Router();
@@ -11,7 +12,7 @@ const VISIBLE_TO_VIEWER = `(p.is_demo = false OR EXISTS (SELECT 1 FROM profiles 
 // Fetch discovery profiles for swipe feed
 router.get("/discovery", authenticateToken, async (req, res) => {
   const userId = req.user.id;
-  const limit = parseInt(req.query.limit) || 20;
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
 
   try {
     // 1. Fetch user's preferences
@@ -49,6 +50,7 @@ router.get("/discovery", authenticateToken, async (req, res) => {
         AND p.id NOT IN (
           SELECT swipee_id FROM swipes WHERE swiper_id = $1
         )
+      ORDER BY p.is_online DESC, p.created_at DESC, p.id
       LIMIT $3;
     `;
 
@@ -56,7 +58,7 @@ router.get("/discovery", authenticateToken, async (req, res) => {
 
     res.status(200).json(result.rows);
   } catch (err) {
-    console.error("Fetch discovery error:", err);
+    logger.error("fetch discovery failed", err);
     res.status(500).json({ error: "Internal server error fetching discovery profiles" });
   }
 });
@@ -86,13 +88,15 @@ router.get("/likes-you", authenticateToken, async (req, res) => {
         AND ${VISIBLE_TO_VIEWER}
         AND p.id NOT IN (
           SELECT swipee_id FROM swipes WHERE swiper_id = $1
-        )`,
+        )
+      ORDER BY s.created_at DESC
+      LIMIT 100`,
       [userId]
     );
 
     res.status(200).json(result.rows);
   } catch (err) {
-    console.error("Get likes-you error:", err);
+    logger.error("fetch likes-you failed", err);
     res.status(500).json({ error: "Internal server error fetching likes-you profiles" });
   }
 });

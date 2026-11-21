@@ -1,16 +1,17 @@
 const express = require("express");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+const rateLimit = require("express-rate-limit");
 const db = require("./db");
+const config = require("./config");
+const logger = require("./logger");
 const { normalizePhotoList } = require("./photoUtils");
+const { hashPassword, needsRehash, MAX_LENGTH: MAX_PASSWORD_LENGTH } = require("./passwords");
+const session = require("./session");
 
+const { authenticateToken } = session;
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET environment variable is required but was not set");
-}
+const JWT_SECRET = config.jwtSecret;
 
 // Helper to generate UUID-like strings
 function generateId() {
@@ -18,6 +19,7 @@ function generateId() {
 }
 
 const MIN_AGE_YEARS = 18;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function isAtLeastMinAge(birthdate) {
   const dob = new Date(birthdate);
@@ -28,59 +30,69 @@ function isAtLeastMinAge(birthdate) {
   return dob <= cutoff;
 }
 
-// Middleware to authenticate JWT token
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
+// Compared against when the email is unknown, so "no such user" and "wrong password"
+// take the same time and can't be told apart.
+const DUMMY_HASH = bcrypt.hashSync("dateza-dummy-password", 10);
 
-  if (!token) {
-    return res.status(401).json({ error: "Access token is missing" });
-  }
+// Brute-force protection: failed logins only, per email + IP.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `${String(req.body?.email || "").trim().toLowerCase()}|${req.ip}`,
+  message: { error: "Too many failed sign-in attempts. Please try again in 15 minutes.", code: "rate_limited" },
+});
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: "Access token is invalid or expired" });
-    }
-    req.user = user;
-    next();
-  });
-};
+const asString = (v) => (typeof v === "string" ? v : "");
 
 const handleRegister = async (req, res) => {
-  const { email, password, name } = req.body;
-  if (!email || !password || !name) {
+  const email = asString(req.body?.email);
+  const password = asString(req.body?.password);
+  const name = asString(req.body?.name);
+  if (!email || !password || !name.trim()) {
     return res.status(400).json({ error: "Email, password, and name are required" });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  if (cleanEmail.length > 254 || !EMAIL_RE.test(cleanEmail)) {
+    return res.status(400).json({ error: "Please enter a valid email address" });
   }
 
   if (password.length < 8) {
     return res.status(400).json({ error: "Password must be at least 8 characters long" });
   }
-
-  const cleanEmail = email.trim().toLowerCase();
+  if (password.length > MAX_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: `Password must be at most ${MAX_PASSWORD_LENGTH} characters long` });
+  }
+  if (name.trim().length > 100) {
+    return res.status(400).json({ error: "Name is too long" });
+  }
 
   try {
     // Check if email already exists
     const existing = await db.query("SELECT id FROM profiles WHERE email = $1", [cleanEmail]);
     if (existing.rows.length > 0) {
-      return res.status(400).json({ error: "An account with this email already exists" });
+      return res.status(409).json({ error: "An account with this email already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password);
     const userId = generateId();
 
     const result = await db.query(
       `INSERT INTO profiles (id, email, password, name, is_online)
-       VALUES ($1, $2, $3, $4, true)
+       VALUES ($1, $2, $3, $4, false)
        RETURNING id, email, name, is_online, created_at`,
       [userId, cleanEmail, hashedPassword, name.trim()]
     );
 
-    const profile = result.rows[0];
-    const token = jwt.sign({ id: profile.id, email: profile.email }, JWT_SECRET, { expiresIn: "30d" });
-
-    res.status(201).json({ token, user: profile });
+    session.sendSession(req, res, result.rows[0], 201);
   } catch (err) {
-    console.error("Registration error:", err);
+    if (err.code === "23505") {
+      return res.status(409).json({ error: "An account with this email already exists" });
+    }
+    logger.error("registration failed", err);
     res.status(500).json({ error: "Internal server error during registration" });
   }
 };
@@ -89,8 +101,9 @@ router.post("/register", handleRegister);
 router.post("/signup", handleRegister);
 
 // Route: User login
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+router.post("/login", loginLimiter, async (req, res) => {
+  const email = asString(req.body?.email);
+  const password = asString(req.body?.password);
   if (!email || !password) {
     return res.status(400).json({ error: "Email and password are required" });
   }
@@ -99,52 +112,122 @@ router.post("/login", async (req, res) => {
 
   try {
     const result = await db.query("SELECT * FROM profiles WHERE email = $1", [cleanEmail]);
-    if (result.rows.length === 0) {
-      return res.status(400).json({ error: "Invalid email or password" });
-    }
-
     const user = result.rows[0];
-    const passwordMatch = await bcrypt.compare(password, user.password);
+    const passwordMatch = await bcrypt.compare(password.slice(0, 1024), user ? user.password : DUMMY_HASH);
 
-    if (!passwordMatch) {
-      return res.status(400).json({ error: "Invalid email or password" });
+    if (!user || !passwordMatch) {
+      return res.status(401).json({ error: "Invalid email or password", code: "invalid_credentials" });
     }
 
-    // Set online status
-    await db.query("UPDATE profiles SET is_online = true WHERE id = $1", [user.id]);
-    user.is_online = true;
+    // Online presence is tracked by live socket connections (see index.js), not by login.
 
+    // Transparently upgrade an older, cheaper hash now that we know the plaintext
+    if (needsRehash(user.password)) {
+      hashPassword(password)
+        .then((h) => db.query("UPDATE profiles SET password = $1 WHERE id = $2", [h, user.id]))
+        .catch((err) => logger.error("password rehash failed", err));
+    }
     // Delete password from user object
     delete user.password;
 
-    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: "30d" });
-
-    res.status(200).json({ token, user });
+    session.sendSession(req, res, user);
   } catch (err) {
-    console.error("Login error:", err);
+    logger.error("login failed", err);
     res.status(500).json({ error: "Internal server error during login" });
   }
 });
 
-// Route: Complete profile setup
-router.post("/complete-setup", authenticateToken, async (req, res) => {
-  const { birthdate, gender, looking_for, bio, height_cm, interests, lat, lng } = req.body;
-  // Keep only photos other devices can load: our stored images or web URLs
-  const photos = normalizePhotoList(req.body.photos);
-  const userId = req.user.id;
-
-  if (birthdate && !isAtLeastMinAge(birthdate)) {
-    return res.status(400).json({ error: `You must be at least ${MIN_AGE_YEARS} years old to use Dateza` });
+// Route: Log out. Clears the web cookie; native clients just discard their token.
+// Works even with an expired session so a stale cookie can always be removed.
+router.post("/logout", (req, res) => {
+  const { via } = session.extractCredential(req);
+  if (via === "cookie" && !session.passesCsrf(req)) {
+    return res.status(403).json({ error: "Request blocked (CSRF check failed)", code: "csrf" });
   }
+  session.clearSessionCookie(res);
+  res.status(200).json({ ok: true });
+});
+
+// Route: One-time ticket for opening a Socket.IO connection (used by web, where the
+// session token lives in an HttpOnly cookie that sockets on another origin can't use).
+router.post("/socket-ticket", authenticateToken, (req, res) => {
+  res.status(200).json({ ticket: session.createSocketTicket(req.user.id, req.user.tv ?? 0), expires_in: config.socketTicketSeconds });
+});
+
+// Validates the profile fields a client may send. Fields that are absent are left alone.
+function validateProfileInput(body) {
+  const out = {};
+  const text = (key, max) => {
+    if (body[key] === undefined) return null;
+    if (body[key] !== null && typeof body[key] !== "string") return `${key} must be text`;
+    if (typeof body[key] === "string" && body[key].length > max) return `${key} must be ${max} characters or fewer`;
+    out[key] = body[key] === null ? null : body[key].trim();
+    return null;
+  };
+  if (body.name !== undefined) {
+    if (typeof body.name !== "string" || !body.name.trim() || body.name.trim().length > 100) {
+      return { error: "name must be 1 to 100 characters" };
+    }
+    out.name = body.name.trim();
+  }
+  for (const [key, max] of [["gender", 50], ["looking_for", 50], ["bio", 1000]]) {
+    const err = text(key, max);
+    if (err) return { error: err };
+  }
+  if (body.birthdate !== undefined) {
+    if (typeof body.birthdate !== "string" || isNaN(new Date(body.birthdate).getTime())) {
+      return { error: "birthdate must be a valid date" };
+    }
+    if (!isAtLeastMinAge(body.birthdate)) {
+      return { error: `You must be at least ${MIN_AGE_YEARS} years old to use Dateza` };
+    }
+    out.birthdate = body.birthdate;
+  }
+  if (body.height_cm !== undefined) {
+    const h = Number(body.height_cm);
+    if (!Number.isInteger(h) || h < 0 || h > 300) return { error: "height_cm must be a whole number up to 300" };
+    out.height_cm = h || null;
+  }
+  if (body.interests !== undefined) {
+    if (!Array.isArray(body.interests) || body.interests.length > 30 || body.interests.some((i) => typeof i !== "string" || i.length > 40)) {
+      return { error: "interests must be a list of up to 30 short texts" };
+    }
+    out.interests = body.interests.map((i) => i.trim()).filter(Boolean);
+  }
+  for (const key of ["lat", "lng"]) {
+    if (body[key] === undefined || body[key] === null) continue;
+    const n = Number(body[key]);
+    if (!Number.isFinite(n) || Math.abs(n) > 180) return { error: `${key} is not valid` };
+    out[key] = n;
+  }
+  if (body.photos !== undefined) {
+    if (!Array.isArray(body.photos) || body.photos.length > 12) return { error: "photos must be a list of up to 12 images" };
+    // Keep only photos other devices can load: our stored images or web URLs
+    out.photos = normalizePhotoList(body.photos);
+  }
+  return { fields: out };
+}
+
+// Route: Complete / update profile. Only the fields you send are changed, so a client
+// can update just the photos (or bio, ...) without wiping the rest of the profile.
+router.post("/complete-setup", authenticateToken, async (req, res) => {
+  const parsed = validateProfileInput(req.body || {});
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const userId = req.user.id;
+  const f = parsed.fields;
 
   try {
     const result = await db.query(
       `UPDATE profiles
-       SET birthdate = $1, gender = $2, looking_for = $3, bio = $4, height_cm = $5,
-           interests = $6, photos = $7, lat = $8, lng = $9
+       SET birthdate = COALESCE($1, birthdate), gender = COALESCE($2, gender),
+           looking_for = COALESCE($3, looking_for), bio = COALESCE($4, bio),
+           height_cm = COALESCE($5, height_cm), interests = COALESCE($6, interests),
+           photos = COALESCE($7, photos), lat = COALESCE($8, lat), lng = COALESCE($9, lng),
+           name = COALESCE($11, name)
        WHERE id = $10
        RETURNING *`,
-      [birthdate, gender, looking_for, bio, height_cm, interests, photos, lat, lng, userId]
+      [f.birthdate ?? null, f.gender ?? null, f.looking_for ?? null, f.bio ?? null, f.height_cm ?? null,
+       f.interests ?? null, f.photos ?? null, f.lat ?? null, f.lng ?? null, userId, f.name ?? null]
     );
 
     if (result.rows.length === 0) {
@@ -153,10 +236,11 @@ router.post("/complete-setup", authenticateToken, async (req, res) => {
 
     const profile = result.rows[0];
     delete profile.password;
+    delete profile.token_version;
 
     res.status(200).json({ user: profile });
   } catch (err) {
-    console.error("Complete setup error:", err);
+    logger.error("complete-setup failed", err);
     res.status(500).json({ error: "Internal server error during profile setup" });
   }
 });
@@ -171,13 +255,47 @@ router.get("/me", authenticateToken, async (req, res) => {
 
     const profile = result.rows[0];
     delete profile.password;
+    delete profile.token_version;
 
     res.status(200).json(profile);
   } catch (err) {
-    console.error("Fetch profile error:", err);
+    logger.error("fetch profile failed", err);
     res.status(500).json({ error: "Internal server error fetching profile" });
   }
 });
+
+// The mock Google account chooser signs in as ANY email without proof of ownership,
+// so it is off unless a developer explicitly opts in on a non-production machine.
+// It can never be enabled when a real Google client ID is configured, or on
+// Render / NODE_ENV=production.
+const MOCK_GOOGLE_LOGIN_ENABLED =
+  process.env.ALLOW_MOCK_GOOGLE_LOGIN === "true" &&
+  !process.env.GOOGLE_CLIENT_ID &&
+  process.env.NODE_ENV !== "production" &&
+  !process.env.RENDER;
+
+const requireMockGoogle = (req, res, next) => {
+  if (!MOCK_GOOGLE_LOGIN_ENABLED) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  next();
+};
+
+// The Google flow hands a session token back by redirecting to a client-supplied URL,
+// so that URL must be one of ours (open-redirect protection): the app's own scheme,
+// Expo dev schemes, a configured web origin, or localhost outside production.
+function isAllowedRedirect(uri) {
+  let u;
+  try {
+    u = new URL(String(uri));
+  } catch {
+    return false;
+  }
+  if (u.protocol === "dateza:" || u.protocol === "exp:" || u.protocol === "exp+dateza:") return true;
+  if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+  if (config.corsOrigins.includes(u.origin)) return true;
+  return !config.isProduction && (u.hostname === "localhost" || u.hostname === "127.0.0.1");
+}
 
 // Google Authentication Route: Get Redirect URL
 router.get("/google/url", (req, res) => {
@@ -185,9 +303,15 @@ router.get("/google/url", (req, res) => {
   if (!redirect_uri) {
     return res.status(400).json({ error: "redirect_uri query parameter is required" });
   }
+  if (!isAllowedRedirect(redirect_uri)) {
+    return res.status(400).json({ error: "redirect_uri is not allowed" });
+  }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  // If no Google client ID is configured, redirect to the local mock account chooser
+  if (!clientId && !MOCK_GOOGLE_LOGIN_ENABLED) {
+    return res.status(503).json({ error: "Google sign-in is not configured" });
+  }
+  // Local development only: redirect to the mock account chooser
   if (!clientId) {
     const mockUrl = `${req.protocol}://${req.get("host")}/api/auth/google/mock-login?state=${encodeURIComponent(redirect_uri)}`;
     return res.json({ url: mockUrl });
@@ -200,7 +324,7 @@ router.get("/google/url", (req, res) => {
 });
 
 // Google Authentication Route: Mock Chooser Page
-router.get("/google/mock-login", (req, res) => {
+router.get("/google/mock-login", requireMockGoogle, (req, res) => {
   const { state } = req.query;
   const html = `
     <!DOCTYPE html>
@@ -393,13 +517,20 @@ router.get("/google/mock-login", (req, res) => {
 router.get("/google/callback", async (req, res) => {
   const { code, state, mock, email, name } = req.query;
   const clientRedirectUri = state || "dateza://auth-callback";
+  if (!isAllowedRedirect(clientRedirectUri)) {
+    return res.status(400).send("Invalid redirect");
+  }
 
   let userEmail = "";
   let userName = "";
 
+  if (!process.env.GOOGLE_CLIENT_ID && !MOCK_GOOGLE_LOGIN_ENABLED) {
+    return res.status(503).send("Google sign-in is not configured");
+  }
+
   try {
-    if (mock === "true" || !process.env.GOOGLE_CLIENT_ID) {
-      // Mock developer flow
+    if (MOCK_GOOGLE_LOGIN_ENABLED && !process.env.GOOGLE_CLIENT_ID) {
+      // Mock developer flow (local development only, see MOCK_GOOGLE_LOGIN_ENABLED)
       userEmail = email || "developer@example.com";
       userName = name || "Developer Account";
     } else {
@@ -434,6 +565,9 @@ router.get("/google/callback", async (req, res) => {
         throw new Error("Failed to retrieve Google userinfo");
       }
 
+      if (!infoData.email || infoData.email_verified === false) {
+        throw new Error("Google account email is missing or not verified");
+      }
       userEmail = infoData.email;
       userName = infoData.name || infoData.given_name || "Google User";
     }
@@ -455,7 +589,7 @@ router.get("/google/callback", async (req, res) => {
       // Create new user profile with a generated password hash (to satisfy NOT NULL constraint)
       userId = generateId();
       const mockPasswordRaw = crypto.randomBytes(16).toString("hex");
-      const hashedPassword = await bcrypt.hash(mockPasswordRaw, 10);
+      const hashedPassword = await hashPassword(mockPasswordRaw);
       
       const insertResult = await db.query(
         `INSERT INTO profiles (id, email, password, name, is_online)
@@ -469,7 +603,7 @@ router.get("/google/callback", async (req, res) => {
     delete userRecord.password;
     
     // Generate JWT token
-    const appToken = jwt.sign({ id: userRecord.id, email: userRecord.email }, JWT_SECRET, { expiresIn: "30d" });
+    const appToken = session.signAccessToken(userRecord, "native");
     
     // Redirect back to app with token and user details
     const redirectUrl = new URL(clientRedirectUri);
@@ -478,10 +612,12 @@ router.get("/google/callback", async (req, res) => {
     
     res.redirect(redirectUrl.toString());
   } catch (err) {
-    console.error("Google Auth callback error:", err);
-    res.status(500).send(`Authentication Failed: ${err.message}`);
+    logger.error("google callback failed", err);
+    res.status(500).send("Authentication failed");
   }
 });
+
+router.validateProfileInput = validateProfileInput;
 
 module.exports = {
   router,

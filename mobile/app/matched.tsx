@@ -1,3 +1,4 @@
+import { getAppWidth } from "@/lib/layout";
 import React, { useEffect } from "react";
 import {
   View,
@@ -6,7 +7,6 @@ import {
   Image,
   StyleSheet,
   StatusBar,
-  Dimensions,
 } from "react-native";
 import { router } from "expo-router";
 import Animated, {
@@ -23,7 +23,7 @@ import Svg, { Defs, ClipPath, Path, Image as SvgImage } from "react-native-svg";
 import { Platform, ScrollView } from "react-native";
 
 
-const { width: SW } = Dimensions.get("window");
+const SW = getAppWidth();
 
 // Sub-component to render a premium heart-shaped profile card
 function HeartCard({ photoUrl }: { photoUrl?: string }) {

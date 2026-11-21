@@ -6,6 +6,15 @@
 // Creates a throwaway account (images-e2e-*@example.com); run it against a local
 // or staging database, not production.
 
+// Safety: these scripts create accounts and delete nothing, and API_URL may be a server
+// connected to ANY database. Only run them against a disposable one, and say so:
+//   E2E_CONFIRM_DISPOSABLE_DB=1 API_URL=http://localhost:5001 npm run test:chat
+// (Prefer `npm run test:integration`, which starts its own app on a throwaway database.)
+if (process.env.E2E_CONFIRM_DISPOSABLE_DB !== "1") {
+  console.error("Refusing to run: set E2E_CONFIRM_DISPOSABLE_DB=1 to confirm the server uses a disposable database.");
+  process.exit(1);
+}
+
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 
