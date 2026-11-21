@@ -20,6 +20,7 @@ const swipes = require("./swipes");
 const matches = require("./matches");
 const demo = require("./demo");
 const images = require("./images");
+const media = require("./media");
 
 const app = express();
 const server = http.createServer(app);
@@ -87,6 +88,7 @@ app.get("/readyz", async (req, res) => {
 // Images: mounted before the global JSON parser because uploads need a larger
 // body limit (the default is 100 KB). Has its own upload rate limit.
 app.use("/api/images", images.router);
+app.use("/api/media", media.router);
 
 app.use(express.json({ limit: "100kb" }));
 
@@ -130,6 +132,7 @@ app.use("/api/auth", auth.router);
 app.use("/api/profiles", profiles);
 app.use("/api/swipes", swipes);
 app.use("/api/matches", matches);
+app.use("/api/stories", media.storiesRouter);
 
 // Root test endpoint
 app.get("/", (req, res) => {
@@ -265,6 +268,8 @@ const startServer = async () => {
   } catch (err) {
     logger.error("could not reset presence flags", err);
   }
+  await media.cleanupExpiredMedia(io);
+  setInterval(() => media.cleanupExpiredMedia(io).catch(err => logger.error("media expiry cleanup failed", err)), 30000).unref();
   server.listen(config.port, () => {
     logger.info("server listening", { port: config.port, production: config.isProduction });
   });

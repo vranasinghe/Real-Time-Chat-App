@@ -65,11 +65,12 @@ async function listConversations(req, res) {
        LEFT JOIN match_reads other_read ON other_read.match_id = m.id AND other_read.user_id = p.id
        LEFT JOIN LATERAL (
          SELECT row_to_json(x) AS last_message
-         FROM (SELECT * FROM messages WHERE match_id = m.id ORDER BY id DESC LIMIT 1) x
+         FROM (SELECT * FROM messages WHERE match_id = m.id AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY id DESC LIMIT 1) x
        ) lm ON true
        LEFT JOIN LATERAL (
          SELECT COUNT(*) AS unread FROM messages
          WHERE match_id = m.id AND sender_id <> $1
+           AND (expires_at IS NULL OR expires_at > NOW())
            AND id > COALESCE(my_read.last_read_message_id, 0)
        ) uc ON true
        WHERE m.user_a = $1 OR m.user_b = $1
@@ -174,6 +175,7 @@ router.get("/:matchId/messages", authenticateToken, async (req, res) => {
       `SELECT * FROM (
          SELECT * FROM messages
          WHERE match_id = $1 AND ($2::int IS NULL OR id < $2)
+           AND (expires_at IS NULL OR expires_at > NOW())
          ORDER BY id DESC
          LIMIT $3
        ) page ORDER BY id ASC`,
@@ -217,12 +219,22 @@ router.post("/:matchId/messages", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Access denied to this match thread" });
     }
 
+    let mediaId = null;
+    let expiresAt = null;
+    if (messageKind === "image") {
+      const photoId = body.startsWith("/api/media/") ? body.slice(11) : null;
+      if (!photoId || !UUID_RE.test(photoId)) return res.status(400).json({ error: "Upload your chat photo first." });
+      const photo = await db.query("SELECT id, expires_at FROM ephemeral_media WHERE id = $1 AND owner_id = $2 AND match_id = $3 AND purpose = 'chat' AND media_type = 'image' AND expires_at > NOW()", [photoId, userId, matchId]);
+      if (!photo.rows.length) return res.status(400).json({ error: "Photo is unavailable or expired. Upload it again." });
+      mediaId = photo.rows[0].id;
+      expiresAt = photo.rows[0].expires_at;
+    }
     const result = await db.query(
-      `INSERT INTO messages (match_id, sender_id, body, kind, client_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO messages (match_id, sender_id, body, kind, client_id, media_id, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (client_id) DO NOTHING
        RETURNING *`,
-      [matchId, userId, body, messageKind, client_id || null]
+      [matchId, userId, body, messageKind, client_id || null, mediaId, expiresAt]
     );
 
     if (result.rows.length === 0) {

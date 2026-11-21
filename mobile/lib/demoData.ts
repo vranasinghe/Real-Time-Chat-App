@@ -1,4 +1,5 @@
 import type { Profile } from "./store";
+import { SHOWCASE_PROFILES } from "./showcaseProfiles";
 
 /**
  * Offline demo content. Used by "Try Demo" so the app can be explored
@@ -48,6 +49,7 @@ const p = (
 });
 
 export const DEMO_PROFILES: Profile[] = [
+  ...SHOWCASE_PROFILES,
   p("demo-liana", "Liana Ray", "2001-03-14", "female", "male",
     "Looking for someone to join me on a sunrise hike or a late-night diner run. I make a mean sourdough.",
     167, ["Hiking", "Baking", "Sunrises", "Road Trips"],
@@ -87,7 +89,7 @@ export const DEMO_PROFILES: Profile[] = [
 ];
 
 /** Profiles that have already liked the demo user ("Likes You" tab). */
-export const DEMO_LIKES_YOU: Profile[] = DEMO_PROFILES.slice(0, 3).map((profile) => ({
+export const DEMO_LIKES_YOU: Profile[] = DEMO_PROFILES.filter((profile) => !profile.id.startsWith("demo-showcase-")).slice(0, 3).map((profile) => ({
   ...profile,
   swipe_message: "Hey! Love your profile. Coffee sometime?",
 }));

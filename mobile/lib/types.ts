@@ -51,6 +51,7 @@ export interface Message {
   kind: "text" | "image" | "location";
   created_at: string;
   status?: MessageStatus; // Only set on the sender's device
+  expires_at?: string | null;
 }
 
 export interface LiveDemoPersona {
@@ -79,4 +80,5 @@ export interface Story {
   media_url: string;
   media_type: "image" | "video";
   created_at: string;
+  expires_at?: string;
 }

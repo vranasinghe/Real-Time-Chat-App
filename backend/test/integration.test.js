@@ -78,7 +78,7 @@ class WebClient {
     const set = res.headers.get("set-cookie");
     if (set) this.cookie = set.split(";")[0].endsWith("=") ? "" : set.split(";")[0];
     const text = await res.text();
-    return { status: res.status, data: text ? JSON.parse(text) : null, headers: res.headers };
+    return { status: res.status, data: text ? (() => { try { return JSON.parse(text); } catch { return text; } })() : null, headers: res.headers };
   }
 }
 
@@ -94,7 +94,7 @@ class NativeClient {
       body: body ? JSON.stringify(body) : undefined,
     });
     const text = await res.text();
-    return { status: res.status, data: text ? JSON.parse(text) : null, headers: res.headers };
+    return { status: res.status, data: text ? (() => { try { return JSON.parse(text); } catch { return text; } })() : null, headers: res.headers };
   }
 }
 
@@ -480,7 +480,7 @@ test("protected data routes need credentials; discovery is capped; demo accounts
 test("migrations are recorded once and re-running initialisation is safe", async () => {
   await db.initDb();
   const { rows } = await db.query("SELECT name FROM schema_migrations ORDER BY name");
-  assert.deepEqual(rows.map((r) => r.name), ["001_indexes_and_constraints.sql", "002_account_security.sql"]);
+  assert.deepEqual(rows.map((r) => r.name), ["001_indexes_and_constraints.sql", "002_account_security.sql", "003_ephemeral_media.sql"]);
 });
 
 test("health endpoints", async () => {
@@ -489,3 +489,86 @@ test("health endpoints", async () => {
 });
 
 void session;
+
+
+// ---- expiring chat photos and statuses -------------------------------------------------
+async function uploadMedia(client, bytes, purpose = "story", matchId) {
+  return fetch(base + `/api/media?purpose=${purpose}${matchId ? `&matchId=${encodeURIComponent(matchId)}` : ""}`, {
+    method: "POST", headers: { "Content-Type": "application/octet-stream", "X-Requested-With": "dateza", Origin: ORIGIN,
+      ...(client.cookie ? { Cookie: client.cookie } : {}), ...(client.token ? { Authorization: `Bearer ${client.token}` } : {}) },
+    body: bytes,
+  });
+}
+const mediaHeaders = client => client.token ? { Authorization: `Bearer ${client.token}` } : { Cookie: client.cookie };
+
+test("chat photo upload is private, shared by socket, idempotent, and unavailable at its 12-hour deadline", async () => {
+  const { a, b, matchId } = await matchedPair();
+  const stranger = await signUpNative("photo-stranger");
+  const socket = await nativeSocket(b.c);
+  try {
+    assert.equal((await uploadMedia(stranger.c, PNG_1PX, "chat", matchId)).status, 403);
+    const upload = await uploadMedia(a.c, PNG_1PX, "chat", matchId);
+    assert.equal(upload.status, 201);
+    const media = await upload.json();
+    assert.ok(Math.abs(Date.parse(media.expires_at) - Date.now() - 12 * 3600000) < 10000);
+    assert.equal((await fetch(base + media.url)).status, 401);
+    assert.equal((await fetch(base + media.url, { headers: mediaHeaders(stranger.c) })).status, 404);
+    const got = await fetch(base + media.url, { headers: mediaHeaders(b.c) });
+    assert.equal(got.status, 200);
+    assert.match(got.headers.get("cache-control"), /no-store/);
+    assert.deepEqual(Buffer.from(await got.arrayBuffer()), PNG_1PX);
+    const event = nextEvent(socket, "new_message");
+    const body = { body: media.url, kind: "image", client_id: crypto.randomUUID() };
+    const posted = await a.c.call("POST", `/api/matches/${matchId}/messages`, body);
+    assert.equal(posted.status, 201);
+    assert.equal((await event).kind, "image");
+    assert.equal((await a.c.call("POST", `/api/matches/${matchId}/messages`, body)).status, 200);
+    assert.equal(posted.data.expires_at, media.expires_at);
+    await db.query("UPDATE ephemeral_media SET expires_at = NOW() WHERE id = $1", [media.id]);
+    await db.query("UPDATE messages SET expires_at = NOW() WHERE id = $1", [posted.data.id]);
+    assert.equal((await fetch(base + media.url, { headers: mediaHeaders(b.c) })).status, 404);
+    assert.equal((await b.c.call("GET", `/api/matches/${matchId}/messages`)).data.length, 0);
+    const conversations = await b.c.call("GET", "/api/matches/conversations");
+    assert.equal(conversations.data.find(m => m.id === matchId).last_message, null);
+    await require("../media").cleanupExpiredMedia(io);
+    assert.equal((await db.query("SELECT id FROM ephemeral_media WHERE id = $1", [media.id])).rowCount, 0);
+    assert.equal((await db.query("SELECT id FROM messages WHERE id = $1", [posted.data.id])).rowCount, 0);
+  } finally { socket.disconnect(); }
+});
+
+test("status photos and video support shared feeds, byte ranges, ownership, and physical expiry", async () => {
+  const a = await signUpWeb("status");
+  const b = await signUpNative("status-reader");
+  const video = Buffer.concat([Buffer.from([0,0,0,24]), Buffer.from("ftypisom"), Buffer.alloc(4), Buffer.from("isommp42")]);
+  for (const [bytes, type] of [[PNG_1PX, "image"], [video, "video"]]) {
+    const uploaded = await uploadMedia(a.c, bytes);
+    assert.equal(uploaded.status, 201);
+    const media = await uploaded.json();
+    const publish = await a.c.call("POST", "/api/stories", { media_id: media.id });
+    assert.equal(publish.status, 201);
+    assert.equal(publish.data.media_type, type);
+    assert.equal((await a.c.call("POST", "/api/stories", { media_id: media.id })).status, 200);
+    const feed = await b.c.call("GET", "/api/stories");
+    assert.ok(feed.data.some(s => s.id === publish.data.id));
+    assert.equal((await b.c.call("DELETE", `/api/stories/${publish.data.id}`)).status, 404);
+    const range = await fetch(base + media.url, { headers: { ...mediaHeaders(b.c), Range: "bytes=0-7" } });
+    assert.equal(range.status, 206);
+    assert.deepEqual(Buffer.from(await range.arrayBuffer()), bytes.subarray(0,8));
+    assert.equal((await fetch(base + media.url, { headers: { ...mediaHeaders(b.c), Range: "bytes=99999-" } })).status, 416);
+    await db.query("UPDATE ephemeral_media SET expires_at = NOW() WHERE id = $1", [media.id]);
+    assert.equal((await fetch(base + media.url, { headers: mediaHeaders(b.c) })).status, 404);
+    assert.ok(!(await b.c.call("GET", "/api/stories")).data.some(s => s.id === publish.data.id));
+    await require("../media").cleanupExpiredMedia(io);
+    assert.equal((await db.query("SELECT id FROM stories WHERE id = $1", [publish.data.id])).rowCount, 0);
+  }
+});
+
+test("status owners can delete immediately; media upload rejects invalid types and oversized photos", async () => {
+  const a = await signUpWeb("status-validation");
+  assert.equal((await uploadMedia(a.c, Buffer.from("not media"))).status, 400);
+  assert.equal((await uploadMedia(a.c, Buffer.concat([PNG_1PX, Buffer.alloc(5 * 1024 * 1024)]))).status, 413);
+  const media = await (await uploadMedia(a.c, PNG_1PX)).json();
+  const publish = await a.c.call("POST", "/api/stories", { media_id: media.id });
+  assert.equal((await a.c.call("DELETE", `/api/stories/${publish.data.id}`)).status, 204);
+  assert.equal((await fetch(base + media.url, { headers: mediaHeaders(a.c) })).status, 404);
+});

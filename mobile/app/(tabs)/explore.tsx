@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView, TextInput, Image, Modal, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, Alert } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Search, X, Heart, MessageSquare, Compass } from "lucide-react-native";
+import { Search, X, Compass } from "lucide-react-native";
+import { ProfileDetailsModal } from "@/components/ProfileDetailsModal";
 import { useAppStore, Profile } from "@/lib/store";
 import { Chip } from "@/components/Chip";
 import { Badge } from "@/components/Badge";
@@ -20,12 +22,13 @@ export default function ExploreScreen() {
   const filteredProfiles = profiles.filter((p) => {
     if (p.id === user?.id) return false;
     
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          p.interests.some(i => i.toLowerCase().includes(searchQuery.toLowerCase()));
+    const query = searchQuery.toLowerCase();
+    const matchesSearch = (p.name ?? "").toLowerCase().includes(query) ||
+                          (p.interests ?? []).some(i => (i ?? "").toLowerCase().includes(query));
 
     if (!matchesSearch) return false;
 
-    if (activeFilter === "Nearby") return p.lat !== undefined;
+    if (activeFilter === "Nearby") return p.lat != null;
     if (activeFilter === "New") return true;
     if (activeFilter === "Recently Active") return p.is_online;
     return true;
@@ -99,7 +102,7 @@ export default function ExploreScreen() {
         {/* List of profiles grid (2 columns, 4 rows max) */}
         <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
           <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", width: "100%" }}>
-            {filteredProfiles.slice(0, 8).map((profile, index) => (
+            {filteredProfiles.map((profile, index) => (
               <Animated.View
                 key={profile.id}
                 entering={FadeInDown.delay(index * 60).springify()}
@@ -107,12 +110,14 @@ export default function ExploreScreen() {
               >
                 <Pressable
                   onPress={() => setSelectedProfile(profile)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${profile.name}'s full profile`}
                   className="w-full bg-bg-surface border border-white/5 rounded-3xl overflow-hidden active:opacity-90"
                 >
                   {/* Photo cover */}
                   <View style={{ aspectRatio: 1.0, width: "100%", position: "relative" }}>
-                    {profile.photos[0] ? (
-                      <Image source={{ uri: profile.photos[0] }} style={{ width: "100%", height: "100%", borderRadius: 0 }} resizeMode="cover" />
+                    {profile.photos?.[0] ? (
+                      <Image source={{ uri: profile.photos[0] }} style={{ width: "100%", height: "100%", borderRadius: 0 }} contentFit="cover" contentPosition="top" />
                     ) : (
                       <View className="flex-1 items-center justify-center bg-bg-surface">
                         <Compass size={24} color="#9A8FB8" />
@@ -145,118 +150,12 @@ export default function ExploreScreen() {
           </View>
         </ScrollView>
 
-        {/* User Detail modal sheet */}
-        <Modal
-          visible={selectedProfile !== null}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setSelectedProfile(null)}
-        >
-          {selectedProfile && (
-            <View className="flex-1 bg-black/60 justify-end">
-              <View className="bg-bg-base border-t border-white/10 rounded-t-[36px] h-[85%] relative overflow-hidden">
-                <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
-                  
-                  {/* Photo Carousel placeholder */}
-                  <View className="w-full aspect-[4/3] relative bg-bg-surface">
-                    {selectedProfile.photos[0] ? (
-                      <Image source={{ uri: selectedProfile.photos[0] }} className="w-full h-full object-cover" />
-                    ) : (
-                      <View className="flex-1 items-center justify-center">
-                        <Compass size={40} color="#9A8FB8" />
-                      </View>
-                    )}
-                    
-                    {/* Floating Badges */}
-                    <View className="absolute top-6 left-6 flex-row space-x-2">
-                      <Badge label={`${selectedProfile.match_percent}% Match`} />
-                    </View>
-
-                    {/* Close Button */}
-                    <Pressable
-                      onPress={() => setSelectedProfile(null)}
-                      className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/40 items-center justify-center border border-white/10"
-                    >
-                      <X size={20} color="#FFFFFF" />
-                    </Pressable>
-                  </View>
-
-                  {/* Body Details */}
-                  <View className="p-6">
-                    <View className="flex-row items-center justify-between mb-4">
-                      <View>
-                        <Text className="text-white text-3xl font-bold font-display italic">
-                          {selectedProfile.name}, {new Date().getFullYear() - new Date(selectedProfile.birthdate).getFullYear()}
-                        </Text>
-                        {/* Location / distance display removed */}
-                      </View>
-
-                      {/* Online state */}
-                      {selectedProfile.is_online && (
-                        <View className="flex-row items-center bg-online/10 border border-online/20 px-3 py-1 rounded-full">
-                          <View className="w-2 h-2 rounded-full bg-online mr-1.5" />
-                          <Text className="text-online text-[12px] font-sans font-bold">Online</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* About me */}
-                    <Text className="text-white font-display text-lg font-bold mb-2">About Me</Text>
-                    <Text className="text-text-secondary font-sans text-[15px] leading-6 mb-6">
-                      {selectedProfile.bio}
-                    </Text>
-
-                    {/* Interests */}
-                    <Text className="text-white font-display text-lg font-bold mb-3">Interests</Text>
-                    <View className="flex-row flex-wrap mb-6">
-                      {selectedProfile.interests.map((interest) => (
-                        <View key={interest} className="mr-2 mb-2">
-                          <Chip label={interest} active={true} />
-                        </View>
-                      ))}
-                    </View>
-
-                    {/* General Specs */}
-                    <View className="bg-bg-surface border border-white/5 rounded-2xl p-4 space-y-3 mb-10">
-                      <View className="flex-row justify-between">
-                        <Text className="text-text-secondary font-sans">Height</Text>
-                        <Text className="text-white font-sans font-bold">{selectedProfile.height_cm} cm</Text>
-                      </View>
-                      <View className="flex-row justify-between">
-                        <Text className="text-text-secondary font-sans">Gender</Text>
-                        <Text className="text-white font-sans font-bold capitalize">{selectedProfile.gender}</Text>
-                      </View>
-                      <View className="flex-row justify-between">
-                        <Text className="text-text-secondary font-sans">Looking For</Text>
-                        <Text className="text-white font-sans font-bold capitalize">{selectedProfile.looking_for}</Text>
-                      </View>
-                    </View>
-
-                  </View>
-                </ScrollView>
-
-                {/* Bottom Sticky Action Bar */}
-                <View className="absolute bottom-0 left-0 right-0 p-6 bg-bg-base/95 border-t border-white/5 flex-row space-x-4">
-                  <Pressable
-                    onPress={() => handleLikePress(selectedProfile)}
-                    className="flex-1 bg-like rounded-2xl py-3.5 items-center justify-center flex-row"
-                  >
-                    <Heart size={18} color="#FFFFFF" fill="#FFFFFF" className="mr-2" />
-                    <Text className="text-white font-sans font-bold text-base">Like Back</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => handleMessagePress(selectedProfile)}
-                    className="flex-1 bg-primary rounded-2xl py-3.5 items-center justify-center flex-row"
-                  >
-                    <MessageSquare size={18} color="#FFFFFF" className="mr-2" />
-                    <Text className="text-white font-sans font-bold text-base">Send Message</Text>
-                  </Pressable>
-                </View>
-
-              </View>
-            </View>
-          )}
-        </Modal>
+        <ProfileDetailsModal
+          profile={selectedProfile}
+          onClose={() => setSelectedProfile(null)}
+          onLike={handleLikePress}
+          onMessage={handleMessagePress}
+        />
 
       </View>
     </SafeAreaView>

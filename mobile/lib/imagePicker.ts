@@ -31,10 +31,12 @@ export class ImagePickError extends Error {
 const approxBytes = (base64: string) => Math.floor((base64.length * 3) / 4);
 
 /** Opens the photo library. Resolves null if the user cancels; throws ImagePickError if the photo is unusable. */
-export async function pickProfileImage(): Promise<PickedImage | null> {
+export async function pickProfileImage(camera = false): Promise<PickedImage | null> {
   let result: ImagePicker.ImagePickerResult;
   try {
-    result = await ImagePicker.launchImageLibraryAsync({
+    if (camera && !(await ImagePicker.requestCameraPermissionsAsync()).granted) throw new ImagePickError("Allow camera access to take a photo.");
+    const pick = camera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
+    result = await pick({
       mediaTypes: ["images"],
       allowsEditing: true,
       quality: 0.7, // re-encodes to JPEG, which also converts iPhone HEIC photos

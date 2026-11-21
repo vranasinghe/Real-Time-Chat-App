@@ -80,6 +80,7 @@ const initDb = async () => {
       logger.info("production environment: skipping mock profile seeding");
     } else {
       await seedMockProfiles();
+      await require("./showcaseProfiles").seedShowcaseProfiles((text, params) => pool.query(text, params));
     }
   }
 };

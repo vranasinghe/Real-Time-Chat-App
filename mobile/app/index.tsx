@@ -63,24 +63,6 @@ export default function SplashScreen() {
             Get Started
           </Text>
         </Pressable>
-
-        {/* Live demo: real-time chat between two devices, no sign up */}
-        <Pressable
-          onPress={() => router.push("/live-demo")}
-          className="border border-white/20 active:bg-white/5 rounded-full py-4 items-center justify-center mt-4"
-          style={{ width: "72%" }}
-        >
-          <Text className="text-white/90 font-sans font-semibold text-[16px]">
-            Live Demo · Chat on 2 devices
-          </Text>
-        </Pressable>
-
-        {/* Offline demo: explore the app on this device only, no server needed */}
-        <Pressable onPress={() => router.push("/demo")} className="py-3 mt-2" hitSlop={8}>
-          <Text className="text-white/60 font-sans text-[14px] underline">
-            Offline demo (this device only)
-          </Text>
-        </Pressable>
       </View>
     </View>
   );

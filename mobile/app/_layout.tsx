@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import { useAppStore } from "@/lib/store";
+import { MEDIA_LIFETIME_MS } from "@/lib/media";
 import { ResponsiveFrame } from "@/components/common/ResponsiveFrame";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
@@ -43,6 +44,22 @@ export default function RootLayout() {
   const segments = useSegments();
   const navState = useRootNavigationState();
   const router = useRouter();
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      const state = useAppStore.getState();
+      if (!state.isInitialized) return;
+      const items = [...state.stories, ...state.messages.filter(message => message.kind === "image")];
+      if (!items.length) return;
+      const next = Math.min(...items.map(item => item.expires_at ? Date.parse(item.expires_at) : Date.parse(item.created_at) + MEDIA_LIFETIME_MS));
+      if (!Number.isFinite(next) || next <= Date.now()) { state.expireMedia(); return; }
+      timer = setTimeout(() => useAppStore.getState().expireMedia(), Math.min(next - Date.now() + 10, 2147483647));
+    };
+    const unsubscribe = useAppStore.subscribe(schedule);
+    schedule();
+    return () => { unsubscribe(); if (timer) clearTimeout(timer); };
+  }, []);
 
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_700Bold,

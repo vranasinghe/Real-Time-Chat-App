@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node --test test/session.test.js test/units.test.js",
+    "test": "node --test test/session.test.js test/units.test.js test/showcase.test.js",
     "test:integration": "node --test --test-concurrency=1 test/integration.test.js",
     "test:session": "node --test test/session.test.js",
     "test:chat": "node test/chat.e2e.js",

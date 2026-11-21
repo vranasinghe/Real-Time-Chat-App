@@ -10,6 +10,7 @@ import { DEMO_USER, DEMO_PROFILES, DEMO_LIKES_YOU } from "./demoData";
 import { BACKEND_URL, CONFIG_ERROR, IS_WEB, resolveMediaUrl } from "./config";
 import { ApiError, apiJson, authFetch, configureApi, fetchSocketTicket } from "./api";
 import { clearToken, loadToken, saveToken } from "./tokenStore";
+import { isMediaActive, MEDIA_LIFETIME_MS, uploadEphemeralMedia } from "./media";
 
 export { resolveMediaUrl };
 
@@ -21,9 +22,15 @@ export type {
 };
 
 // Applies resolveMediaUrl to a profile's photos (null/undefined pass through)
-function withMedia<T extends { photos?: string[] } | null | undefined>(profile: T): T {
-  if (!profile || !Array.isArray(profile.photos)) return profile;
-  return { ...profile, photos: profile.photos.map(resolveMediaUrl) };
+// The API can send photos/interests as null (e.g. profiles that never finished setup).
+// Normalize to arrays so screens can safely read photos[0] / interests.map.
+function withMedia<T extends { photos?: string[] | null; interests?: string[] | null } | null | undefined>(profile: T): T {
+  if (!profile) return profile;
+  return {
+    ...profile,
+    photos: Array.isArray(profile.photos) ? profile.photos.filter(Boolean).map(resolveMediaUrl) : [],
+    interests: Array.isArray(profile.interests) ? profile.interests : [],
+  };
 }
 
 // Global WebSocket reference
@@ -113,7 +120,7 @@ interface AppState {
   resetSwipes: () => void;
 
   // Chat Actions
-  sendMessage: (matchId: string, body: string, kind?: "text" | "image" | "location") => Promise<void>;
+  sendMessage: (matchId: string, body: string, kind?: "text" | "image" | "location", expiresAt?: string) => Promise<void>;
   retryMessage: (clientId: string) => Promise<void>;
   receiveMessage: (message: Message) => void;
   loadMessagesForMatch: (matchId: string) => Message[];
@@ -127,6 +134,8 @@ interface AppState {
   // Story Actions
   addStory: (mediaUrl: string, mediaType: "image" | "video") => Promise<void>;
   deleteStory: (storyId: string) => Promise<void>;
+  fetchStories: () => Promise<void>;
+  expireMedia: () => void;
 }
 
 
@@ -176,6 +185,7 @@ async function clearSessionLocal() {
     swipes: [],
     profiles: [],
     likesYou: [],
+    stories: [],
   });
 }
 
@@ -203,6 +213,7 @@ async function establishSession(data: { token?: string; user: Profile }, profile
     messages: [],
     profiles: [],
     likesYou: [],
+    stories: [],
   });
   useAppStore.getState().getSocketConnection();
 }
@@ -229,7 +240,7 @@ async function verifySession() {
     });
     const store = useAppStore.getState();
     store.getSocketConnection();
-    await Promise.all([store.fetchMatches(), store.fetchDiscoveryProfiles(), store.fetchLikesYou()]);
+    await Promise.all([store.fetchMatches(), store.fetchDiscoveryProfiles(), store.fetchLikesYou(), store.fetchStories()]);
   } catch (e) {
     if (e instanceof ApiError && e.kind === "http" && (e.status === 401 || e.status === 404)) {
       await clearSessionLocal();
@@ -282,6 +293,7 @@ export const useAppStore = create<AppState>()(
       initializeStore: async () => {
         WebBrowser.maybeCompleteAuthSession();
         await waitForHydration();
+        get().expireMedia();
 
         // A send that was in flight when the app closed never got confirmed
         set((state) => ({
@@ -726,7 +738,7 @@ export const useAppStore = create<AppState>()(
         await get().fetchDiscoveryProfiles();
       },
 
-      sendMessage: async (matchId, body, kind = "text") => {
+      sendMessage: async (matchId, body, kind = "text", expiresAt) => {
         const { user } = get();
         const isLive = isLiveSession(get());
         const text = body.trim();
@@ -740,6 +752,7 @@ export const useAppStore = create<AppState>()(
           sender_id: user.id,
           body: text,
           kind,
+          ...(kind === "image" ? { expires_at: expiresAt || new Date(Date.now() + MEDIA_LIFETIME_MS).toISOString() } : {}),
           created_at: new Date().toISOString(),
           status: isLive ? "sending" : "sent",
         };
@@ -955,11 +968,18 @@ export const useAppStore = create<AppState>()(
           conn.on("connect", () => {
             set({ socketConnected: true });
             get().fetchMatches();
+            void get().fetchStories();
             const open = get().activeThreadId;
             if (open) get().loadThread(open);
           });
 
           conn.on("disconnect", () => set({ socketConnected: false }));
+          conn.on("stories_changed", () => { void get().fetchStories(); });
+          conn.on("media_expired", (event: { match_id: string }) => {
+            get().expireMedia();
+            void get().fetchMatches();
+            if (get().activeThreadId === event.match_id) void get().loadThread(event.match_id);
+          });
 
           conn.on("new_message", (message: Message) => {
             get().receiveMessage(message);
@@ -1003,37 +1023,58 @@ export const useAppStore = create<AppState>()(
       // The app came back to the foreground (or the network returned): reconnect the
       // socket if the OS dropped it, and catch up on anything missed meanwhile.
       resumeConnection: async () => {
+        get().expireMedia();
         if (!isLiveSession(get())) return;
         const conn = get().getSocketConnection();
         if (conn && !conn.connected) conn.connect();
         await get().fetchMatches();
+        await get().fetchStories();
         const open = get().activeThreadId;
         if (open) await get().loadThread(open);
       },
 
+      fetchStories: async () => {
+        get().expireMedia();
+        if (!isLiveSession(get())) return;
+        const accountId = get().user?.id;
+        try {
+          const stories = await apiJson<Story[]>("/api/stories");
+          if (get().user?.id === accountId && isLiveSession(get())) set({ stories: stories.filter(story => isMediaActive(story)).map(story => ({ ...story, user_avatar: resolveMediaUrl(story.user_avatar) })) });
+        } catch (error) { console.warn("Could not refresh statuses", error); }
+      },
+
+      expireMedia: () => set(state => {
+        const messages = state.messages.filter(message => message.kind !== "image" || isMediaActive(message));
+        return {
+          stories: state.stories.filter(story => isMediaActive(story)),
+          messages,
+          matches: state.matches.map(match => match.last_message?.kind === "image" && !isMediaActive(match.last_message)
+            ? { ...match, last_message: messages.filter(message => message.match_id === match.id).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0] || null } : match),
+        };
+      }),
+
       addStory: async (mediaUrl: string, mediaType: "image" | "video") => {
         const { user } = get();
-        if (!user) return;
-
-        const newStory: Story = {
-          id: `story-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-          user_id: user.id,
-          user_name: user.name || "My Story",
-          user_avatar: (user.photos && user.photos.length > 0) ? user.photos[0] : "https://i.pravatar.cc/150?img=47",
-          media_url: mediaUrl,
-          media_type: mediaType,
-          created_at: new Date().toISOString(),
-        };
-
-        set((state) => ({
-          stories: [newStory, ...state.stories],
-        }));
+        if (!user) throw new Error("Sign in to add a status.");
+        let newStory: Story;
+        if (isLiveSession(get())) {
+          const media = await uploadEphemeralMedia(mediaUrl, mediaType, "story");
+          newStory = await apiJson<Story>("/api/stories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ media_id: media.id }) });
+          newStory.user_avatar = resolveMediaUrl(newStory.user_avatar);
+        } else {
+          newStory = {
+            id: `story-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+            user_id: user.id, user_name: user.name || "My Story", user_avatar: user.photos?.[0] || "",
+            media_url: mediaUrl, media_type: mediaType, created_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + MEDIA_LIFETIME_MS).toISOString(),
+          };
+        }
+        if (get().user?.id === user.id) set(state => ({ stories: [newStory, ...state.stories.filter(story => story.id !== newStory.id && isMediaActive(story))] }));
       },
 
       deleteStory: async (storyId: string) => {
-        set((state) => ({
-          stories: state.stories.filter((s) => s.id !== storyId),
-        }));
+        if (isLiveSession(get())) await apiJson(`/api/stories/${storyId}`, { method: "DELETE" });
+        set(state => ({ stories: state.stories.filter(story => story.id !== storyId) }));
       },
     }),
     {

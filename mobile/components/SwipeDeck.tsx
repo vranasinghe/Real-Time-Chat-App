@@ -2,9 +2,8 @@ import React from "react";
 import {
   View,
   Text,
-  Image,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   Pressable,
   Alert,
 } from "react-native";
@@ -19,23 +18,23 @@ import Animated, {
 } from "react-native-reanimated";
 import { X, Heart, MessageSquare, MoreVertical } from "lucide-react-native";
 import { Profile } from "@/lib/store";
-
-const { width: SW, height: SH } = Dimensions.get("window");
-
-// Card dimensions: width = screen - padding, height = available after header/stories/actions/tabbar
-const CARD_W = SW - 32; // 16px left + 16px right padding
-// SH - SafeArea top (~50) - header(52) - search(56) - stories(82) - actionRow(78) - tabBar(100) - extra(20)
-const CARD_H = Math.min(CARD_W * 1.28, SH - 438);
-const SWIPE_THRESHOLD = SW * 0.38;
+import { Image } from "expo-image";
+import { MAX_APP_WIDTH } from "@/lib/layout";
 
 interface SwipeDeckProps {
   profiles: Profile[];
   onSwipe: (profile: Profile, direction: "like" | "pass" | "super") => void;
   onMessagePress: (profile: Profile) => void;
+  onViewProfile: (profile: Profile) => void;
   onReset?: () => void;
 }
 
-export function SwipeDeck({ profiles, onSwipe, onMessagePress, onReset }: SwipeDeckProps) {
+export function SwipeDeck({ profiles, onSwipe, onMessagePress, onViewProfile, onReset }: SwipeDeckProps) {
+  const window = useWindowDimensions();
+  const SW = Math.min(window.width, MAX_APP_WIDTH);
+  const CARD_W = SW - 32;
+  const CARD_H = Math.max(180, Math.min(CARD_W * 1.28, window.height - 438));
+  const SWIPE_THRESHOLD = SW * 0.38;
   const activeProfiles = profiles.slice(0, 3);
 
   const tx = useSharedValue(0);
@@ -44,6 +43,7 @@ export function SwipeDeck({ profiles, onSwipe, onMessagePress, onReset }: SwipeD
   const startY = useSharedValue(0);
 
   const pan = Gesture.Pan()
+    .minDistance(12)
     .onStart(() => {
       startX.value = tx.value;
       startY.value = ty.value;
@@ -149,6 +149,7 @@ export function SwipeDeck({ profiles, onSwipe, onMessagePress, onReset }: SwipeD
                 key={profile.id}
                 style={[
                   styles.card,
+                  { width: CARD_W, height: CARD_H },
                   {
                     zIndex: 20 - index,
                     transform: [{ scale }, { translateY: vert }],
@@ -160,6 +161,8 @@ export function SwipeDeck({ profiles, onSwipe, onMessagePress, onReset }: SwipeD
                   <Image
                     source={{ uri: profile.photos[0] }}
                     style={styles.cardPhoto}
+                    contentPosition="top"
+                    contentFit="cover"
                   />
                 ) : (
                   <View style={styles.noPhoto}>
@@ -176,13 +179,21 @@ export function SwipeDeck({ profiles, onSwipe, onMessagePress, onReset }: SwipeD
           /* Top (interactive) card */
           return (
             <GestureDetector key={profile.id} gesture={pan}>
-              <Animated.View style={[styles.card, { zIndex: 30 }, topCardAnim]}>
+              <Animated.View style={[styles.card, { zIndex: 30, width: CARD_W, height: CARD_H }, topCardAnim]}>
 
                 {/* Photo or placeholder */}
+                <Pressable
+                  style={StyleSheet.absoluteFill}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${profile.name}'s full profile`}
+                  onPress={() => onViewProfile(profile)}
+                >
                 {profile.photos[0] ? (
                   <Image
                     source={{ uri: profile.photos[0] }}
                     style={styles.cardPhoto}
+                    contentPosition="top"
+                    contentFit="cover"
                   />
                 ) : (
                   <View style={styles.noPhoto}>
@@ -192,6 +203,7 @@ export function SwipeDeck({ profiles, onSwipe, onMessagePress, onReset }: SwipeD
                     <Text style={styles.noPhotoText}>No Image Preview</Text>
                   </View>
                 )}
+                </Pressable>
 
                 {/* LIKE stamp */}
                 <Animated.View style={[styles.likeStamp, likeStampAnim]}>
@@ -247,12 +259,9 @@ export function SwipeDeck({ profiles, onSwipe, onMessagePress, onReset }: SwipeD
                   </Text>
 
                   <Pressable
-                    onPress={() =>
-                      Alert.alert(
-                        "Profile",
-                        `Opening ${profile.name}'s full profile.`
-                      )
-                    }
+                    onPress={() => onViewProfile(profile)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${profile.name}'s full profile details`}
                     style={styles.viewProfileBtn}
                   >
                     <Text style={styles.viewProfileTxt}>View Full Profile</Text>
@@ -308,8 +317,6 @@ const styles = StyleSheet.create({
   },
   card: {
     position: "absolute",
-    width: CARD_W,
-    height: CARD_H,
     borderRadius: 26,
     overflow: "hidden",
     backgroundColor: "#1B1035",
@@ -324,7 +331,6 @@ const styles = StyleSheet.create({
   cardPhoto: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
 
   /* ── No-photo placeholder ── */

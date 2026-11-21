@@ -15,39 +15,12 @@ import {
 } from "lucide-react-native";
 import { useAppStore, Profile, Story } from "@/lib/store";
 import { SwipeDeck } from "@/components/SwipeDeck";
-import { WebView } from "react-native-webview";
+import { ProfileDetailsModal } from "@/components/ProfileDetailsModal";
+import { StoryVideo } from "@/components/StoryVideo";
+import { Image as StatusImage } from "expo-image";
+import { isMediaActive, privateMediaSource } from "@/lib/media";
 import * as ImagePicker from "expo-image-picker";
 
-
-const getVideoHtml = (url: string) => `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background-color: black;
-      overflow: hidden;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-  </style>
-</head>
-<body>
-  <video src="${url}" autoplay loop playsinline webkit-playsinline muted></video>
-</body>
-</html>
-`;
 
 const PRESET_PHOTOS = [
   { id: "p1", name: "Classic", url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80" },
@@ -75,13 +48,16 @@ export default function DiscoveryScreen() {
     createQuickMatch,
     stories,
     addStory,
-    deleteStory 
+    deleteStory,
+    fetchStories,
+    token,
   } = useAppStore();
 
   const [unreadNotifications, setUnreadNotifications] = useState(true);
   const [icebreakerModalVisible, setIcebreakerModalVisible] = useState(false);
   const [icebreakerText, setIcebreakerText] = useState("");
   const [selectedProfileForIcebreaker, setSelectedProfileForIcebreaker] = useState<Profile | null>(null);
+  const [viewedProfile, setViewedProfile] = useState<Profile | null>(null);
 
   const [addStoryModalVisible, setAddStoryModalVisible] = useState(false);
   const [viewStoryModalVisible, setViewStoryModalVisible] = useState(false);
@@ -94,12 +70,24 @@ export default function DiscoveryScreen() {
 
   const [selectedStories, setSelectedStories] = useState<Story[]>([]);
 
-  const myStories = stories.filter((s) => s.user_id === user?.id);
+  useEffect(() => { void fetchStories(); }, [fetchStories, user?.id]);
+  const myStories = stories.filter((s) => s.user_id === user?.id && isMediaActive(s));
+  useEffect(() => {
+    if (!viewStoryModalVisible) return;
+    const active = selectedStories[currentStoryIndex];
+    const remaining = selectedStories.filter(story => stories.some(current => current.id === story.id) && isMediaActive(story));
+    if (!remaining.length) { setViewStoryModalVisible(false); setSelectedStories([]); return; }
+    if (remaining.length !== selectedStories.length) {
+      setSelectedStories(remaining);
+      setCurrentStoryIndex(Math.max(0, remaining.findIndex(story => story.id === active?.id)));
+      setStoryProgress(0);
+    }
+  }, [stories, selectedStories, currentStoryIndex, viewStoryModalVisible]);
 
   // Group other users' stories by user_id
   const otherStoriesGrouped = useMemo(() => {
     const groups: { [userId: string]: Story[] } = {};
-    stories.forEach((s) => {
+    stories.filter(story => isMediaActive(story)).forEach((s) => {
       if (s.user_id !== user?.id) {
         if (!groups[s.user_id]) {
           groups[s.user_id] = [];
@@ -141,7 +129,7 @@ export default function DiscoveryScreen() {
 
   useEffect(() => {
     let interval: any;
-    if (viewStoryModalVisible && selectedStories.length > 0) {
+    if (viewStoryModalVisible && selectedStories.length > 0 && selectedStories[currentStoryIndex]?.media_type !== "video") {
       interval = setInterval(() => {
         if (!isTimerPaused) {
           setStoryProgress((prev) => {
@@ -179,29 +167,28 @@ export default function DiscoveryScreen() {
 
   const pickMedia = async (mediaType: "image" | "video") => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (permissionResult.granted === false) {
-        Alert.alert("Permission Required", "Permission to access camera roll is required to upload stories.");
-        return;
-      }
-
-      setUploading(true);
+      // Launch directly from the button press: web pickers need a user gesture.
+      if (uploading) return;
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: mediaType === "image" ? ImagePicker.MediaTypeOptions.Images : ImagePicker.MediaTypeOptions.Videos,
-        allowsEditing: true,
-        aspect: [9, 16],
+        mediaTypes: mediaType === "image" ? ["images"] : ["videos"],
+        allowsEditing: false,
+        videoMaxDuration: 60,
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedUri = result.assets[0].uri;
+        const asset = result.assets[0];
+        if (asset.fileSize && asset.fileSize > (mediaType === "video" ? 25 : 5) * 1024 * 1024) throw new Error(mediaType === "video" ? "Videos must be 25 MB or smaller." : "Photos must be 5 MB or smaller.");
+        if (mediaType === "video" && asset.duration && asset.duration > 60000) throw new Error("Choose a video up to 60 seconds long.");
+        setUploading(true);
+        const selectedUri = asset.uri;
         await addStory(selectedUri, mediaType);
         setAddStoryModalVisible(false);
         Alert.alert("Success 🎉", "Your story has been added successfully!");
       }
     } catch (e) {
       console.error(e);
-      Alert.alert("Upload Failed", "An error occurred while uploading your story.");
+      Alert.alert("Upload Failed", e instanceof Error ? e.message : "An error occurred while uploading your story.");
     } finally {
       setUploading(false);
     }
@@ -369,7 +356,8 @@ export default function DiscoveryScreen() {
 
                 {/* Plus badge */}
                 <Pressable
-                  onPress={() => setAddStoryModalVisible(true)}
+                  onPress={(event) => { event.stopPropagation(); setAddStoryModalVisible(true); }}
+                  accessibilityRole="button" accessibilityLabel="Add status"
                   style={styles.plusBadge}
                 >
                   <Plus size={10} color="#fff" strokeWidth={3} />
@@ -412,11 +400,18 @@ export default function DiscoveryScreen() {
             profiles={feedProfiles}
             onSwipe={handleSwipe}
             onMessagePress={handleMessagePress}
+            onViewProfile={setViewedProfile}
             onReset={resetSwipes}
           />
         </View>
 
         {/* Icebreaker Modal */}
+        <ProfileDetailsModal
+          profile={viewedProfile}
+          onClose={() => setViewedProfile(null)}
+          onLike={(profile) => { setViewedProfile(null); void handleSwipe(profile, "like"); }}
+          onMessage={(profile) => { setViewedProfile(null); handleMessagePress(profile); }}
+        />
         <Modal
           visible={icebreakerModalVisible}
           animationType="fade"
@@ -493,13 +488,16 @@ export default function DiscoveryScreen() {
               </View>
               
               <Text style={styles.modalDesc}>
-                Upload a portrait photo or looping video clip to share with other users for 24 hours.
+                Upload a portrait photo or looping video clip to share with other users for 12 hours. Photos up to 5 MB; videos up to 25 MB and 60 seconds.
               </Text>
+              {uploading && <View accessibilityRole="progressbar" style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}><ActivityIndicator color="#7C5CFF" /><Text style={{ color: "#B9AECE" }}>Uploading status…</Text></View>}
 
               {/* Upload source options */}
               <Text style={styles.sectionLabel}>Camera Roll</Text>
               <View style={styles.pickerRow}>
                 <Pressable
+                  disabled={uploading}
+                  accessibilityRole="button" accessibilityLabel="Add status photo"
                   onPress={() => pickMedia("image")}
                   style={[styles.pickerBtn, { backgroundColor: "rgba(124,92,255,0.12)", borderColor: "rgba(124,92,255,0.3)" }]}
                 >
@@ -507,6 +505,8 @@ export default function DiscoveryScreen() {
                   <Text style={styles.pickerBtnText}>Add Photo</Text>
                 </Pressable>
                 <Pressable
+                  disabled={uploading}
+                  accessibilityRole="button" accessibilityLabel="Add status video"
                   onPress={() => pickMedia("video")}
                   style={[styles.pickerBtn, { backgroundColor: "rgba(236,72,153,0.12)", borderColor: "rgba(236,72,153,0.3)" }]}
                 >
@@ -610,27 +610,26 @@ export default function DiscoveryScreen() {
                 
                 {/* Media Element */}
                 {selectedStories[currentStoryIndex].media_type === "video" ? (
-                  <WebView
-                    source={{ html: getVideoHtml(selectedStories[currentStoryIndex].media_url) }}
-                    style={styles.storyViewerMedia}
-                    javaScriptEnabled={true}
-                    domStorageEnabled={true}
-                    allowsInlineMediaPlayback={true}
-                    mediaPlaybackRequiresUserAction={false}
-                    scalesPageToFit={true}
+                  <StoryVideo
+                    key={selectedStories[currentStoryIndex].id}
+                    uri={selectedStories[currentStoryIndex].media_url}
+                    paused={isTimerPaused}
+                    onProgress={setStoryProgress}
+                    onEnd={handleNextStory}
                   />
                 ) : (
-                  <Image
-                    source={{ uri: selectedStories[currentStoryIndex].media_url }}
+                  <StatusImage
+                    source={privateMediaSource(selectedStories[currentStoryIndex].media_url, token)}
                     style={styles.storyViewerMedia}
-                    resizeMode="cover"
+                    contentFit="contain"
+                    cachePolicy="none"
                   />
                 )}
 
                 {/* Left/Right Touch navigation areas */}
-                <View style={styles.touchNavWrapper}>
-                  <Pressable onPress={handlePrevStory} style={styles.touchNavLeft} />
-                  <Pressable onPress={handleNextStory} style={styles.touchNavRight} />
+                <View pointerEvents="box-none" style={styles.touchNavWrapper}>
+                  <Pressable accessibilityLabel="Previous status" onPress={handlePrevStory} style={[styles.touchNavLeft, selectedStories[currentStoryIndex].media_type === "video" && { width: "15%", flex: 0 }]} />
+                  <Pressable accessibilityLabel="Next status" onPress={handleNextStory} style={[styles.touchNavRight, selectedStories[currentStoryIndex].media_type === "video" && { width: "15%", flex: 0 }]} />
                 </View>
 
                 {/* Top overlay controls */}

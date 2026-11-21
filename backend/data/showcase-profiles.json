@@ -1,0 +1,206 @@
+[
+  {
+    "key": "maya",
+    "name": "Maya Bennett",
+    "birthdate": "2001-03-14",
+    "gender": "female",
+    "looking_for": "everyone",
+    "height_cm": 167,
+    "bio": "Landscape designer and weekend trail explorer. My perfect Sunday starts with a sunrise walk and ends with homemade pasta. Looking for kindness, curiosity, and a real connection.",
+    "interests": [
+      "Hiking",
+      "Cooking",
+      "Gardens",
+      "Road Trips"
+    ],
+    "is_online": true,
+    "match_percent": 92
+  },
+  {
+    "key": "isla",
+    "name": "Isla Reed",
+    "birthdate": "1999-08-15",
+    "gender": "female",
+    "looking_for": "everyone",
+    "height_cm": 168,
+    "bio": "Art curator with a soft spot for little galleries and big conversations. Tell me about the place you would visit twice. Looking for someone thoughtful with a playful side.",
+    "interests": [
+      "Art",
+      "Coffee",
+      "Design",
+      "Museums"
+    ],
+    "is_online": true,
+    "match_percent": 90
+  },
+  {
+    "key": "amara",
+    "name": "Amara Patel",
+    "birthdate": "1998-02-20",
+    "gender": "female",
+    "looking_for": "everyone",
+    "height_cm": 165,
+    "bio": "Avid reader, product designer, and enthusiastic beginner at pottery. I love quiet bookshops as much as a spontaneous city break. Here for a meaningful relationship.",
+    "interests": [
+      "Reading",
+      "Pottery",
+      "Travel",
+      "Yoga"
+    ],
+    "is_online": false,
+    "match_percent": 88
+  },
+  {
+    "key": "hana",
+    "name": "Hana Park",
+    "birthdate": "2000-06-25",
+    "gender": "female",
+    "looking_for": "everyone",
+    "height_cm": 170,
+    "bio": "Photographer collecting everyday moments and new recipes. Usually planning a coastal walk or finding the best noodles in town. A good sense of humour goes a long way.",
+    "interests": [
+      "Photography",
+      "Fashion",
+      "Food",
+      "Cinema"
+    ],
+    "is_online": true,
+    "match_percent": 86
+  },
+  {
+    "key": "sofia",
+    "name": "Sofia Costa",
+    "birthdate": "1996-01-08",
+    "gender": "female",
+    "looking_for": "everyone",
+    "height_cm": 163,
+    "bio": "Marine biologist happiest beside the ocean. Equally up for a beach clean-up, live music, or cooking dinner together. Looking for an adventurous partner with a warm heart.",
+    "interests": [
+      "Ocean",
+      "Science",
+      "Travel",
+      "Music"
+    ],
+    "is_online": true,
+    "match_percent": 84
+  },
+  {
+    "key": "naomi",
+    "name": "Naomi Brooks",
+    "birthdate": "2002-09-03",
+    "gender": "female",
+    "looking_for": "everyone",
+    "height_cm": 172,
+    "bio": "Illustrator, bass player, and iced-coffee enthusiast. I know a great record shop and an even better brunch spot. Hoping to meet someone creative and down to earth.",
+    "interests": [
+      "Art",
+      "Music",
+      "Coffee",
+      "Brunch"
+    ],
+    "is_online": false,
+    "match_percent": 82
+  },
+  {
+    "key": "adrian",
+    "name": "Adrian Cole",
+    "birthdate": "1998-04-12",
+    "gender": "male",
+    "looking_for": "everyone",
+    "height_cm": 182,
+    "bio": "Chef by trade, trail explorer by choice. I make excellent pancakes and take terrible victory photos at the summit. Looking for someone to share the little everyday adventures.",
+    "interests": [
+      "Cooking",
+      "Hiking",
+      "Nature",
+      "Fitness"
+    ],
+    "is_online": true,
+    "match_percent": 80
+  },
+  {
+    "key": "rohan",
+    "name": "Rohan Silva",
+    "birthdate": "1996-02-05",
+    "gender": "male",
+    "looking_for": "everyone",
+    "height_cm": 178,
+    "bio": "Software engineer who closes the laptop for live music, weekend runs, and a proper cup of coffee. I value honesty, family, and a relationship we can both grow in.",
+    "interests": [
+      "Music",
+      "Tech",
+      "Running",
+      "Coffee"
+    ],
+    "is_online": true,
+    "match_percent": 78
+  },
+  {
+    "key": "julian",
+    "name": "Julian Hayes",
+    "birthdate": "1994-07-11",
+    "gender": "male",
+    "looking_for": "everyone",
+    "height_cm": 185,
+    "bio": "Architect with a weakness for jazz bars and second-hand bookstores. Happiest sketching a new place or making dinner for friends. Seeking a lasting connection.",
+    "interests": [
+      "Architecture",
+      "Jazz",
+      "Books",
+      "Design"
+    ],
+    "is_online": false,
+    "match_percent": 76
+  },
+  {
+    "key": "luca",
+    "name": "Luca Martin",
+    "birthdate": "1997-09-30",
+    "gender": "male",
+    "looking_for": "everyone",
+    "height_cm": 180,
+    "bio": "Outdoor guide and enthusiastic amateur surfer. Give me sea air, a good playlist, and someone to laugh with. Looking for a kind partner who enjoys an active life.",
+    "interests": [
+      "Surfing",
+      "Travel",
+      "Music",
+      "Beach"
+    ],
+    "is_online": true,
+    "match_percent": 74
+  },
+  {
+    "key": "kai",
+    "name": "Kai Chen",
+    "birthdate": "2000-05-17",
+    "gender": "male",
+    "looking_for": "everyone",
+    "height_cm": 181,
+    "bio": "Physiotherapist, weekend cyclist, and dedicated dumpling researcher. I enjoy staying active but will always stop for a good sunset. Here for easy conversation and something real.",
+    "interests": [
+      "Cycling",
+      "Food",
+      "Fitness",
+      "Photography"
+    ],
+    "is_online": true,
+    "match_percent": 72
+  },
+  {
+    "key": "elias",
+    "name": "Elias Grant",
+    "birthdate": "1992-07-11",
+    "gender": "male",
+    "looking_for": "everyone",
+    "height_cm": 184,
+    "bio": "Entrepreneur who makes time for tennis, slow travel, and long dinners with friends. Looking for someone emotionally open, curious, and ready to build something meaningful.",
+    "interests": [
+      "Tennis",
+      "Travel",
+      "Cooking",
+      "Cinema"
+    ],
+    "is_online": false,
+    "match_percent": 70
+  }
+]

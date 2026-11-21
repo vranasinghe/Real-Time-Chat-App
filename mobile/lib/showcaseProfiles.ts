@@ -1,0 +1,26 @@
+import { Asset } from "expo-asset";
+import type { Profile } from "./types";
+import catalog from "../assets/profiles/catalog.json";
+
+// Static requires let Metro package every photo for web, Android, and iOS,
+// including the offline demo with no API server or remote image host.
+const photos: Record<string, number> = {
+  maya: require("../assets/profiles/maya.png"),
+  isla: require("../assets/profiles/isla.png"),
+  amara: require("../assets/profiles/amara.png"),
+  hana: require("../assets/profiles/hana.png"),
+  sofia: require("../assets/profiles/sofia.png"),
+  naomi: require("../assets/profiles/naomi.png"),
+  adrian: require("../assets/profiles/adrian.png"),
+  rohan: require("../assets/profiles/rohan.png"),
+  julian: require("../assets/profiles/julian.png"),
+  luca: require("../assets/profiles/luca.png"),
+  kai: require("../assets/profiles/kai.png"),
+  elias: require("../assets/profiles/elias.png"),
+};
+
+export const SHOWCASE_PROFILES: Profile[] = catalog.map(({ key, ...profile }) => ({
+  ...profile,
+  id: `demo-showcase-${key}`,
+  photos: [Asset.fromModule(photos[key]).uri],
+}));

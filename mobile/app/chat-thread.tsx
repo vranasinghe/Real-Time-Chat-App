@@ -31,6 +31,9 @@ import {
 } from "lucide-react-native";
 import { useAppStore, Message } from "@/lib/store";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import { Image as MediaImage } from "expo-image";
+import { pickProfileImage, PickedImage } from "@/lib/imagePicker";
+import { isMediaActive, privateMediaSource, uploadEphemeralMedia } from "@/lib/media";
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -50,12 +53,18 @@ export default function ChatThreadScreen() {
   const matches = useAppStore((s) => s.matches);
   const allMessages = useAppStore((s) => s.messages);
   const user = useAppStore((s) => s.user);
+  const token = useAppStore((s) => s.token);
+  const isDemo = useAppStore((s) => s.isDemo);
   const thread = useAppStore((s) => (matchId ? s.threads[matchId] : undefined));
   const { sendMessage, retryMessage, loadThread, loadOlderMessages, markThreadRead, setActiveThread } =
     useAppStore.getState();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState("");
   const [showAttachmentSheet, setShowAttachmentSheet] = useState(false);
+  const [pickedPhoto, setPickedPhoto] = useState<PickedImage | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [viewedPhoto, setViewedPhoto] = useState<Message | null>(null);
+  useEffect(() => { if (viewedPhoto && !isMediaActive(viewedPhoto)) setViewedPhoto(null); }, [viewedPhoto, allMessages]);
   const listRef = useRef<FlatList<Message>>(null);
 
   // Inverted list: offset 0 is the newest message
@@ -114,7 +123,14 @@ export default function ChatThreadScreen() {
     await sending;
   };
 
-  const handleAttachmentOption = (type: string) => {
+  const handleAttachmentOption = async (type: string) => {
+    if (type === "Gallery" || type === "Camera") {
+      try {
+        const photo = await pickProfileImage(type === "Camera");
+        if (photo) { setPickedPhoto(photo); setShowAttachmentSheet(false); }
+      } catch (error) { Alert.alert("Could not select photo", error instanceof Error ? error.message : "Try another photo."); }
+      return;
+    }
     setShowAttachmentSheet(false);
     Alert.alert("Attachment Triggered", `Sharing ${type} in chat...`, [
       {
@@ -132,6 +148,19 @@ export default function ChatThreadScreen() {
       },
       { text: "Cancel", style: "cancel" },
     ]);
+  };
+
+  const sendPhoto = async () => {
+    if (!pickedPhoto || !matchId || uploadingPhoto) return;
+    setUploadingPhoto(true);
+    try {
+      const media = isDemo ? { url: `data:${pickedPhoto.mimeType};base64,${pickedPhoto.base64}`, expires_at: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString() }
+        : await uploadEphemeralMedia(pickedPhoto.uri, "image", "chat", matchId);
+      await sendMessage(matchId, media.url, "image", media.expires_at);
+      setPickedPhoto(null);
+      scrollToNewest();
+    } catch (error) { Alert.alert("Photo not sent", error instanceof Error ? error.message : "Please try again."); }
+    finally { setUploadingPhoto(false); }
   };
 
   const statusLabel = (msg: Message): string | null => {
@@ -157,10 +186,10 @@ export default function ChatThreadScreen() {
         style={[styles.bubbleRow, isMe ? styles.bubbleRowMe : styles.bubbleRowThem]}
       >
         <Pressable
-          disabled={!failed || !msg.client_id}
-          onPress={() => msg.client_id && retryMessage(msg.client_id)}
-          accessibilityRole={failed ? "button" : undefined}
-          accessibilityLabel={failed ? "Message not sent. Tap to retry." : undefined}
+          disabled={msg.kind !== "image" && (!failed || !msg.client_id)}
+          onPress={() => failed && msg.client_id ? retryMessage(msg.client_id) : msg.kind === "image" && setViewedPhoto(msg)}
+          accessibilityRole={failed || msg.kind === "image" ? "button" : undefined}
+          accessibilityLabel={failed ? "Message not sent. Tap to retry." : msg.kind === "image" ? "View shared photo" : undefined}
           style={[
             styles.bubble,
             isMe ? styles.bubbleMe : styles.bubbleThem,
@@ -168,7 +197,10 @@ export default function ChatThreadScreen() {
             failed && styles.bubbleFailed,
           ]}
         >
-          <Text style={styles.bubbleText}>{msg.body}</Text>
+          {msg.kind === "image" ? <>
+            <MediaImage source={privateMediaSource(msg.body, token)} style={{ width: 210, height: 260, borderRadius: 12 }} contentFit="cover" cachePolicy="none" accessibilityLabel="Shared photo" />
+            <Text style={[styles.bubbleTime, { marginTop: 8 }]}>Photo · Deletes after 12 hours</Text>
+          </> : <Text style={styles.bubbleText}>{msg.body}</Text>}
           <Text style={[styles.bubbleTime, failed && styles.bubbleTimeFailed]}>
             {status ? `${time} · ${status}` : time}
           </Text>
@@ -328,6 +360,8 @@ export default function ChatThreadScreen() {
         <View style={styles.inputBar}>
           <Pressable
             onPress={() => setShowAttachmentSheet(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Add attachment"
             style={({ pressed }) => [
               styles.plusBtn,
               pressed && { backgroundColor: "rgba(255,255,255,0.1)" },
@@ -371,6 +405,25 @@ export default function ChatThreadScreen() {
           </Pressable>
         </View>
 
+        <Modal visible={pickedPhoto !== null} transparent animationType="fade" onRequestClose={() => !uploadingPhoto && setPickedPhoto(null)}>
+          <View style={[styles.modalOverlay, { padding: 24 }]}>
+            <View style={{ width: "100%", maxWidth: 480, borderRadius: 20, backgroundColor: "#1B1035", padding: 20 }}>
+              <Text style={{ color: "#FFFFFF", fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold", marginBottom: 16 }}>Send a photo</Text>
+              {pickedPhoto && <MediaImage source={{ uri: pickedPhoto.uri }} style={{ width: "100%", height: 300 }} contentFit="contain" />}
+              <Text style={{ color: "#B9AECE", fontSize: 14, lineHeight: 22, marginVertical: 16 }}>This photo will automatically delete after 12 hours.</Text>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <Pressable accessibilityRole="button" disabled={uploadingPhoto} onPress={() => setPickedPhoto(null)} style={{ padding: 14, flex: 1, alignItems: "center" }}><Text style={{ color: "#FFFFFF" }}>Cancel</Text></Pressable>
+                <Pressable accessibilityRole="button" disabled={uploadingPhoto} onPress={sendPhoto} style={{ padding: 14, flex: 1, alignItems: "center", backgroundColor: "#7C5CFF", borderRadius: 12 }}>{uploadingPhoto ? <ActivityIndicator color="#FFFFFF" /> : <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>Send photo</Text>}</Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+        <Modal visible={viewedPhoto !== null} transparent animationType="fade" onRequestClose={() => setViewedPhoto(null)}>
+          <View style={{ flex: 1, backgroundColor: "#07030F", paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close photo" onPress={() => setViewedPhoto(null)} style={{ alignSelf: "flex-end", padding: 16 }}><X color="#FFFFFF" size={24} /></Pressable>
+            {viewedPhoto && <MediaImage source={privateMediaSource(viewedPhoto.body, token)} style={{ flex: 1 }} contentFit="contain" cachePolicy="none" />}
+          </View>
+        </Modal>
         {/* Attachment Modal */}
         <Modal
           visible={showAttachmentSheet}

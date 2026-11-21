@@ -1,10 +1,11 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView, Alert } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, Pressable, ScrollView, Alert, Image, ActivityIndicator } from "react-native";
 import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react-native";
 import { useAppStore } from "@/lib/store";
+import type { LiveDemoPersona } from "@/lib/types";
 import { PrimaryButton, GhostButton } from "@/components/PrimaryButton";
 import { TextField } from "@/components/TextField";
 import Svg, { Path } from "react-native-svg";
@@ -47,6 +48,34 @@ export default function SignInScreen() {
 
   const signInStore = useAppStore((state) => state.signIn);
   const signInWithGoogle = useAppStore((state) => state.signInWithGoogle);
+  const getLiveDemoStatus = useAppStore((state) => state.getLiveDemoStatus);
+  const signInLiveDemo = useAppStore((state) => state.signInLiveDemo);
+
+  // Two shared demo accounts (male / female) so anyone can try the whole app.
+  // Hidden automatically when the server has demo login turned off or is unreachable.
+  const [demoPersonas, setDemoPersonas] = useState<LiveDemoPersona[]>([]);
+  const [demoLoading, setDemoLoading] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    getLiveDemoStatus()
+      .then((s) => alive && s.enabled && setDemoPersonas(s.personas))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [getLiveDemoStatus]);
+
+  const handleDemoSignIn = async (key: string) => {
+    setError("");
+    setDemoLoading(key);
+    try {
+      await signInLiveDemo(key);
+      router.replace(useAppStore.getState().profileSetupComplete ? "/(tabs)" : "/profile-setup/birthday");
+    } catch (e: any) {
+      setError(e?.message || "Demo sign-in failed. Please try again.");
+      setDemoLoading(null);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setError("");
@@ -185,6 +214,45 @@ export default function SignInScreen() {
               </Pressable>
             </View>
           </View>
+
+          {/* Demo accounts: one tap, full app experience */}
+          {demoPersonas.length > 0 && (
+            <View className="mb-8">
+              <View className="flex-row items-center justify-center mb-4">
+                <View className="flex-1 h-[1px] bg-text-secondary/10" />
+                <Text className="text-text-secondary font-sans text-[13px] font-semibold mx-4 uppercase tracking-wider">
+                  Or try a demo account
+                </Text>
+                <View className="flex-1 h-[1px] bg-text-secondary/10" />
+              </View>
+              <View className="flex-row" style={{ gap: 12 }}>
+                {demoPersonas.map((p) => {
+                  const label = p.name.replace(" (Demo)", "");
+                  const gender = p.key === "alex" ? "Male" : "Female";
+                  const busy = demoLoading === p.key;
+                  return (
+                    <Pressable
+                      key={p.key}
+                      onPress={() => handleDemoSignIn(p.key)}
+                      disabled={!!demoLoading || loading}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Continue as ${label}, demo ${gender.toLowerCase()} account`}
+                      className="flex-1 bg-bg-surface border border-text-secondary/10 active:bg-text-secondary/5 rounded-2xl p-4 items-center"
+                      style={{ opacity: demoLoading && !busy ? 0.5 : 1 }}
+                    >
+                      <Image source={{ uri: p.photo }} style={{ width: 64, height: 64, borderRadius: 32, marginBottom: 8 }} />
+                      <Text className="text-white font-sans font-semibold text-[15px]">{label}</Text>
+                      <Text className="text-text-secondary font-sans text-[12px] mt-0.5">{gender} demo</Text>
+                      {busy ? <ActivityIndicator color="#7C5CFF" style={{ marginTop: 8 }} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text className="text-text-secondary font-sans text-[12px] text-center mt-3 leading-5">
+                Shared accounts for exploring Dateza: swipe, match, chat, send photos and post statuses.
+              </Text>
+            </View>
+          )}
 
           {/* Footer Section */}
           <View className="items-center pb-6 flex-row justify-center">

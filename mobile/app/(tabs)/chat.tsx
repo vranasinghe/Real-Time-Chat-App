@@ -60,7 +60,7 @@ export default function ConversationsScreen() {
       id: item.match.id,
       name: item.match.other_user?.name ?? "Match",
       image: item.match.other_user?.photos[0] ?? "",
-      lastMsg: (isOutgoing ? "You: " : "") + item.last.body,
+      lastMsg: (isOutgoing ? "You: " : "") + (item.last.kind === "image" ? "Photo" : item.last.body),
       isOnline: item.match.other_user?.is_online ?? false,
       isOutgoing,
       unread: item.match.unread_count ?? 0,
