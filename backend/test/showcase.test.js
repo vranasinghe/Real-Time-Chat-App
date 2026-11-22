@@ -73,29 +73,29 @@ test("server and app catalogs are identical", () => {
   assert.deepEqual(JSON.parse(fs.readFileSync(APP_CATALOG, "utf8")), profiles);
 });
 
-test("every fixture has a valid PNG photo in the backend and in the app, and the files are identical", () => {
+test("every fixture has valid PNG photos in the backend and app, and the files are identical", () => {
   for (const p of profiles) {
-    const serverPhoto = fs.readFileSync(path.join(SERVER_PHOTOS, `${p.key}.png`));
-    const appPhoto = fs.readFileSync(path.join(APP_PHOTOS, `${p.key}.png`));
-    assert.ok(serverPhoto.length > 10000, `${p.key}: server photo is a real image, not a stub`);
-    assert.ok(serverPhoto.subarray(0, 8).equals(PNG_SIGNATURE), `${p.key}: is a PNG by content`);
-    assert.ok(serverPhoto.equals(appPhoto), `${p.key}: photo is identical in the backend and the app`);
+    for (const file of p.photo_files || [`${p.key}.png`]) {
+      const serverPhoto = fs.readFileSync(path.join(SERVER_PHOTOS, file));
+      const appPhoto = fs.readFileSync(path.join(APP_PHOTOS, file));
+      assert.ok(serverPhoto.length > 10000, `${p.key}: ${file} is a real image, not a stub`);
+      assert.ok(serverPhoto.subarray(0, 8).equals(PNG_SIGNATURE), `${p.key}: ${file} is a PNG by content`);
+      assert.ok(serverPhoto.equals(appPhoto), `${p.key}: ${file} is identical in the backend and the app`);
+    }
   }
 });
 
-test("the app's static photo map covers exactly the catalog keys", () => {
+test("the app's static photo map covers every fixture photo", () => {
   const source = fs.readFileSync(APP_LOADER, "utf8");
-  const mapped = [...source.matchAll(/^\s*([a-z]+):\s*require\("\.\.\/assets\/profiles\/([a-z]+)\.png"\)/gm)].map((m) => {
-    assert.equal(m[1], m[2], `photo map key "${m[1]}" points at ${m[2]}.png`);
-    return m[1];
-  });
-  assert.deepEqual([...mapped].sort(), profiles.map((p) => p.key).sort());
+  const mapped = [...source.matchAll(/require\("\.\.\/assets\/profiles\/([a-z-]+)\.png"\)/g)].map((m) => m[1]);
+  const expected = profiles.flatMap((p) => (p.photo_files || [`${p.key}.png`]).map((file) => file.slice(0, -4)));
+  assert.deepEqual([...mapped].sort(), expected.sort());
 });
 
 test("photos without a catalog entry are only the documented, deliberately kept orphans", () => {
-  const keys = new Set(profiles.map((p) => p.key));
+  const expectedFiles = new Set(profiles.flatMap((p) => p.photo_files || [`${p.key}.png`]));
   for (const [label, dir] of [["backend", SERVER_PHOTOS], ["app", APP_PHOTOS]]) {
-    const orphans = fs.readdirSync(dir).filter((f) => f.endsWith(".png")).map((f) => f.slice(0, -4)).filter((k) => !keys.has(k));
+    const orphans = fs.readdirSync(dir).filter((f) => f.endsWith(".png")).map((f) => f.slice(0, -4)).filter((k) => !expectedFiles.has(`${k}.png`));
     for (const k of orphans) {
       assert.ok(KNOWN_ORPHAN_PHOTOS.includes(k), `${label}: ${k}.png is not in the catalog and not in KNOWN_ORPHAN_PHOTOS`);
     }
@@ -103,7 +103,7 @@ test("photos without a catalog entry are only the documented, deliberately kept 
   const backendFiles = new Set(fs.readdirSync(SERVER_PHOTOS));
   for (const k of KNOWN_ORPHAN_PHOTOS) {
     assert.ok(backendFiles.has(`${k}.png`), `${k}.png is listed as a known orphan but no longer exists: remove it from KNOWN_ORPHAN_PHOTOS`);
-    assert.ok(!keys.has(k), `${k} is now in the catalog: remove it from KNOWN_ORPHAN_PHOTOS`);
+    assert.ok(!expectedFiles.has(`${k}.png`), `${k}.png is now in the catalog: remove it from KNOWN_ORPHAN_PHOTOS`);
   }
 });
 
@@ -113,8 +113,9 @@ test("fixtures are isolated from real members: dedicated id, email domain and ph
   for (const { params } of calls) {
     assert.match(params[0], /^seed-showcase-[a-z]+$/, "id is in the dedicated fixture namespace");
     assert.match(params[1], /^[a-z]+\.showcase@dateza\.local$/, "email uses the reserved .local domain");
-    assert.deepEqual(params[10].length, 1);
-    assert.match(params[10][0], /^\/public\/profiles\/[a-z]+\.png$/, "photo is a bundled file, not a user upload or remote URL");
+    const fixture = profiles.find((p) => `seed-showcase-${p.key}` === params[0]);
+    const files = fixture.photo_files || [`${fixture.key}.png`];
+    assert.deepEqual(params[10], files.map((file) => `/public/profiles/${file}`), "photos are bundled files, not user uploads or remote URLs");
   }
   // The offline demo in the app uses a different namespace, so the two can never collide.
   assert.match(fs.readFileSync(APP_LOADER, "utf8"), /`demo-showcase-\$\{key\}`/);

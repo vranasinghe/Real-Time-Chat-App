@@ -39,10 +39,11 @@ export function ResponsiveFrame({ children }: { children: React.ReactNode }) {
   const wide = width > MAX_APP_WIDTH;
 
   return (
-    <View style={{ flex: 1, backgroundColor: wide ? "#07030F" : "#0E0720", alignItems: "center" }}>
+    <View style={{ flex: 1, minHeight: 0, backgroundColor: wide ? "#07030F" : "#0E0720", alignItems: "center" }}>
       <View
         style={{
           flex: 1,
+          minHeight: 0,
           width: "100%",
           maxWidth: MAX_APP_WIDTH,
           overflow: "hidden",

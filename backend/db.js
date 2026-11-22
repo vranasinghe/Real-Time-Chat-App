@@ -26,7 +26,6 @@ pool.on("error", (err) => {
   logger.error("unexpected error on idle database client", err);
 });
 
-const bcrypt = require("bcryptjs");
 const dbSafety = require("./dbSafety");
 
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");
@@ -117,7 +116,6 @@ const initDb = async () => {
       // (some of which have a known password). Set ALLOW_REMOTE_DEV_SEED=true to override.
       logger.warn("skipping mock and showcase profile seeding: the database is not local");
     } else {
-      await seedMockProfiles();
       await require("./showcaseProfiles").seedShowcaseProfiles((text, params) => pool.query(text, params));
       await markFixturesComplete();
     }
@@ -136,72 +134,6 @@ const markFixturesComplete = async () => {
   );
 };
 
-const seedMockProfiles = async () => {
-  try {
-    const check = await pool.query("SELECT COUNT(*) FROM profiles WHERE id LIKE 'seed-%'");
-    const count = parseInt(check.rows[0].count);
-    if (count > 0) {
-      return;
-    }
-
-    logger.info("seeding initial mock profiles");
-    const mockProfiles = [
-      {
-        id: "seed-isabelle",
-        email: "isabelle@example.com",
-        name: "Isabelle",
-        birthdate: "2002-09-03",
-        gender: "female",
-        looking_for: "male",
-        bio: "Dancer, foodie, and lover of rainy days. Probably thinking about brunch right now.",
-        height_cm: 169,
-        interests: ["Dance", "Food", "Rain", "Brunch", "Music"],
-        photos: ["https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=600&auto=format&fit=crop&q=80"],
-        is_online: false,
-      },
-      {
-        id: "seed-liam",
-        email: "liam@example.com",
-        name: "Liam",
-        birthdate: "1997-09-30",
-        gender: "male",
-        looking_for: "everyone",
-        bio: "Surfer, dog dad, and part-time DJ. Keeping things simple, positive, and active. Let's hit the beach.",
-        height_cm: 180,
-        interests: ["Surfing", "Dogs", "Music", "Beach"],
-        photos: ["https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=600&auto=format&fit=crop&q=80"],
-        is_online: true,
-      },
-      {
-        id: "seed-zoe",
-        email: "zoe@example.com",
-        name: "Zoe",
-        birthdate: "1999-05-21",
-        gender: "female",
-        looking_for: "male",
-        bio: "Plant mum, wellness coach, and sunrise runner. Healthy lifestyle, big laughs, and deeper conversations.",
-        height_cm: 166,
-        interests: ["Wellness", "Running", "Plants", "Nutrition", "Yoga"],
-        photos: ["https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600&auto=format&fit=crop&q=80"],
-        is_online: false,
-      },
-    ];
-
-    const passwordHash = await bcrypt.hash("password123", 10);
-
-    for (const p of mockProfiles) {
-      await pool.query(
-        `INSERT INTO profiles (id, email, password, name, birthdate, gender, looking_for, bio, height_cm, interests, photos, is_online)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-         ON CONFLICT (id) DO NOTHING`,
-        [p.id, p.email, passwordHash, p.name, p.birthdate, p.gender, p.looking_for, p.bio, p.height_cm, p.interests, p.photos, p.is_online]
-      );
-    }
-    logger.info("mock profiles seeded");
-  } catch (err) {
-    logger.error("seeding profiles failed", err);
-  }
-};
 
 module.exports = {
   query: (text, params) => pool.query(text, params),

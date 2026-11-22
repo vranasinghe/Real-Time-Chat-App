@@ -12,7 +12,7 @@ async function seedShowcaseProfiles(query) {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (id) DO NOTHING`,
       [`seed-showcase-${p.key}`, `${p.key}.showcase@dateza.local`, password, p.name, p.birthdate, p.gender,
-        p.looking_for, p.bio, p.height_cm, p.interests, [`/public/profiles/${p.key}.png`], p.is_online]
+        p.looking_for, p.bio, p.height_cm, p.interests, (p.photo_files || [`${p.key}.png`]).map((file) => `/public/profiles/${file}`), p.is_online]
     );
   }
 }

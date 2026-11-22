@@ -35,6 +35,11 @@
   },
   {
     "key": "amara",
+    "photo_files": [
+      "amara.png",
+      "amara-elegant.png",
+      "amara-lifestyle.png"
+    ],
     "name": "Amara Patel",
     "birthdate": "1998-02-20",
     "gender": "female",

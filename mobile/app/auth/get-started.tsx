@@ -1,10 +1,9 @@
-import React from "react";
-import { View, Text, Pressable, Alert, ScrollView } from "react-native";
+import React, { useState } from "react";
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useAppStore } from "@/lib/store";
-import { PrimaryButton } from "@/components/PrimaryButton";
-import { ImagePlaceholder } from "@/components/ImagePlaceholder";
 import Svg, { Path } from "react-native-svg";
 
 const GoogleIcon = () => (
@@ -28,10 +27,22 @@ const GoogleIcon = () => (
   </Svg>
 );
 
+const FacebookIcon = () => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no">
+    <Path fill="#1877F2" d="M24 12C24 5.373 18.627 0 12 0S0 5.373 0 12c0 5.99 4.388 10.954 10.125 11.854V15.47H7.078V12h3.047V9.356c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.49 0-1.955.925-1.955 1.874V12h3.328l-.532 3.469h-2.796v8.385C19.612 22.954 24 17.99 24 12Z" />
+    <Path fill="#FFFFFF" d="m16.671 15.469.532-3.469h-3.328V9.749c0-.949.465-1.874 1.955-1.874h1.514V4.922s-1.374-.235-2.686-.235c-2.741 0-4.533 1.662-4.533 4.669V12H7.078v3.469h3.047v8.385a12.1 12.1 0 0 0 3.75 0v-8.385h2.796Z" />
+  </Svg>
+);
+
 export default function GetStartedScreen() {
   const signInWithGoogle = useAppStore((state) => state.signInWithGoogle);
+  const { width, height } = useWindowDimensions();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError("");
     try {
       const success = await signInWithGoogle();
       if (success) {
@@ -43,71 +54,100 @@ export default function GetStartedScreen() {
         }
       }
     } catch (e: any) {
-      Alert.alert("Google Auth Error", e.message || "Google Sign-In failed.");
+      setError(e.message || "Google Sign-In failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-bg-base">
+    <SafeAreaView style={styles.screen}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }}
-        className="px-6 py-6"
-        showsVerticalScrollIndicator={false}
+        style={{ flex: 1, minHeight: 0 }}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
       >
+        <View style={styles.header}>
+          <Text style={styles.brand}>Dateza<Text style={styles.brandDot}>.</Text></Text>
+        </View>
+
         {/* Title Section */}
-        <View className="items-center justify-center mt-6 mb-4">
-          {/* Let's Get Started Title & Subtitle */}
-          <Text className="text-white text-3.5xl font-bold font-display text-center tracking-tight mb-3">
-            {"Let's Get Started"}
+        <View style={styles.intro}>
+          <Text accessibilityRole="header" style={[styles.title, width < 360 && styles.smallTitle]}>
+            {"Let's get started."}
           </Text>
-          <Text className="text-text-secondary text-base font-sans text-center px-6 leading-6">
-            Discover love, your way with Dateza
+          <Text style={styles.subtitle}>
+            Discover love, your way with Dateza.
           </Text>
         </View>
 
         {/* Dynamic Image Frame */}
-        <View className="w-full my-4">
-          <ImagePlaceholder
-            aspectRatio={1.1}
+        <View style={[styles.imageFrame, { maxWidth: Math.min(360, Math.max(240, height - 420)) }]}>
+          <Image
+            style={styles.image}
+            contentFit="cover"
+            contentPosition="center"
+            accessible={false}
             source={require("../../assets/images/get-started-bg.jpg")}
           />
         </View>
 
         {/* Action Controls */}
-        <View className="w-full space-y-4">
-          <PrimaryButton
-            label="Sign Up with Email"
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign Up with Email"
+            style={({ pressed }) => [styles.button, styles.primaryButton, pressed && styles.pressed]}
             onPress={() => router.push("/auth/create-account")}
-          />
+          >
+            <Text style={styles.buttonText}>Sign Up with Email</Text>
+          </Pressable>
 
-          <Text className="text-text-secondary font-sans text-[14px] text-center my-2">
-            Or Use Instant Sign Up
-          </Text>
+          <View style={styles.divider}>
+            <View style={styles.rule} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.rule} />
+          </View>
 
           {/* Social Sign Up Rows */}
           <View>
             {/* Google button */}
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sign Up with Google"
+              accessibilityState={{ disabled: loading, busy: loading }}
+              disabled={loading}
               onPress={handleGoogleSignIn}
-              className="w-full border border-white/10 bg-bg-surface/30 active:bg-white/5 rounded-[28px] py-4 px-6 flex-row items-center justify-center"
+              style={({ pressed }) => [styles.button, styles.googleButton, (pressed || loading) && styles.pressed]}
             >
-              <GoogleIcon />
-              <Text className="text-white font-sans font-semibold text-[16px] ml-3">
-                Sign Up with Google
-              </Text>
+              {loading ? <ActivityIndicator color={colors.text} /> : <>
+                <GoogleIcon />
+                <Text style={styles.buttonText}>Sign Up with Google</Text>
+              </>}
             </Pressable>
 
           </View>
-
-          {/* Sign In Footer */}
-          <View className="flex-row justify-center items-center pt-6 pb-2">
-            <Text className="text-text-secondary font-sans text-[14px]">
-              Already have an account?{" "}
-            </Text>
-            <Pressable onPress={() => router.push("/auth/sign-in")}>
-              <Text className="text-primary font-sans font-bold text-[14px]">
-                Sign In
-              </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign Up with Facebook, not configured yet"
+            accessibilityState={{ disabled: true }}
+            disabled
+            style={[styles.button, styles.googleButton, styles.facebookButton]}
+          >
+            <FacebookIcon />
+            <Text style={styles.buttonText}>Sign Up with Facebook</Text>
+          </Pressable>
+          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+          <View style={styles.signInRow}>
+            <Text style={styles.accountPrompt}>Already have an account?</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sign in to your existing account"
+              onPress={() => router.push("/auth/sign-in")}
+              style={({ pressed }) => [styles.signIn, pressed && styles.pressed]}
+            >
+              <Text style={styles.signInText}>Sign In</Text>
             </Pressable>
           </View>
         </View>
@@ -116,3 +156,37 @@ export default function GetStartedScreen() {
     </SafeAreaView>
   );
 }
+
+const colors = {
+  background: "#0E0720", surface: "#1B1035", primary: "#7C5CFF",
+  text: "#FFFFFF", secondary: "#B9AECE", border: "#514365", error: "#FFADBE",
+};
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
+  content: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 16, paddingBottom: 32 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16 },
+  brand: { color: colors.text, fontFamily: "SpaceGrotesk_700Bold", fontSize: 25, letterSpacing: -0.6 },
+  brandDot: { color: colors.primary },
+  signInRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center", marginTop: 4, columnGap: 4 },
+  accountPrompt: { color: colors.secondary, fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 22 },
+  signIn: { minHeight: 48, paddingHorizontal: 8, justifyContent: "center" },
+  signInText: { color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 14, textDecorationLine: "underline" },
+  intro: { marginTop: 28, marginBottom: 24, gap: 8 },
+  title: { color: colors.text, fontFamily: "SpaceGrotesk_700Bold", fontSize: 32, lineHeight: 40, letterSpacing: -0.8 },
+  smallTitle: { fontSize: 28, lineHeight: 36 },
+  subtitle: { color: colors.secondary, fontFamily: "Inter_400Regular", fontSize: 16, lineHeight: 24 },
+  imageFrame: { width: "100%", maxWidth: 360, aspectRatio: 1, alignSelf: "center", overflow: "hidden", borderRadius: 16, backgroundColor: colors.surface },
+  image: { width: "100%", height: "100%" },
+  actions: { marginTop: 24 },
+  button: { minHeight: 56, paddingVertical: 16, paddingHorizontal: 20, borderRadius: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 },
+  primaryButton: { backgroundColor: colors.primary },
+  googleButton: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  facebookButton: { marginTop: 12, opacity: 0.6 },
+  buttonText: { fontFamily: "Inter_600SemiBold", fontSize: 16, lineHeight: 24, color: colors.text, textAlign: "center", flexShrink: 1 },
+  divider: { flexDirection: "row", alignItems: "center", gap: 16, marginVertical: 12 },
+  rule: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { color: colors.secondary, fontFamily: "Inter_400Regular", fontSize: 13 },
+  pressed: { opacity: 0.72 },
+  error: { color: colors.error, fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 22, marginTop: 16 },
+});
