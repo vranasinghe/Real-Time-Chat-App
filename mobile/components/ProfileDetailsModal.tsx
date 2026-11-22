@@ -38,13 +38,17 @@ export function ProfileDetailsModal({ profile, onClose, onLike, onMessage }: Pro
 function ProfileDetails({ profile, onClose, onLike, onMessage }: Props & { profile: Profile }) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const [photoIndex, setPhotoIndex] = useState(0);
+  const [photoIndex, setPhotoIndex] = useState(() => {
+    const fullBody = profile.photos.findIndex(photo => photo.includes("profile-galleries"));
+    return fullBody >= 0 ? fullBody : 0;
+  });
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   const photos = (profile.photos || []).filter(Boolean);
   const photo = photos[photoIndex];
+  const generatedGalleryPhoto = photo?.includes("profile-galleries");
   const sample = profile.id.startsWith("demo-showcase-") || profile.id.startsWith("seed-showcase-");
   const sheetWidth = Math.min(width, MAX_APP_WIDTH);
   const changePhoto = (index: number) => {
@@ -99,7 +103,7 @@ function ProfileDetails({ profile, onClose, onLike, onMessage }: Props & { profi
               <Text accessibilityRole="header" style={styles.name}>{profile.name}, {profileAge(profile.birthdate)}</Text>
               {profile.is_online && <Text style={styles.online}>Online now</Text>}
             </View>
-            {sample && <Text style={styles.sample}>Fictional demo profile · AI-generated photo</Text>}
+            {(sample || generatedGalleryPhoto) && <Text style={styles.sample}>{sample ? "Fictional demo profile · AI-generated photo" : "AI-generated additional photo"}</Text>}
             <Text accessibilityRole="header" style={styles.heading}>About Me</Text>
             <Text style={styles.bio}>{profile.bio || "This person hasn't added a bio yet."}</Text>
             <Text accessibilityRole="header" style={styles.heading}>Personal Details</Text>

@@ -17,7 +17,14 @@ const session = require("../session");
 const config = require("../config");
 
 // No database here: pretend every user exists with token_version 0
-session.setUserLookup(async () => ({ token_version: 0 }));
+// An eligible, active member: dating routes and sockets only open for these (see eligibility.js).
+session.setUserLookup(async () => ({
+  token_version: 0,
+  status: "active",
+  birthdate: "1990-01-01",
+  email_verified_at: "2026-01-01T00:00:00Z",
+  profile_completed_at: "2026-01-01T00:00:00Z",
+}));
 
 let base;
 test.before(async () => {

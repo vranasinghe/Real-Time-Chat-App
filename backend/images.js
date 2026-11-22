@@ -13,6 +13,7 @@ const rateLimit = require("express-rate-limit");
 const db = require("./db");
 const logger = require("./logger");
 const { authenticateToken } = require("./auth");
+const { requireAdult } = require("./eligibility");
 
 const router = express.Router();
 
@@ -62,7 +63,7 @@ const uploadLimiter = rateLimit({
 
 // Route: upload an image (larger body limit than the rest of the API)
 // Authenticate BEFORE parsing the large body, so anonymous callers cannot make us read 8 MB
-router.post("/", uploadLimiter, authenticateToken, express.json({ limit: "8mb" }), async (req, res) => {
+router.post("/", uploadLimiter, authenticateToken, requireAdult, express.json({ limit: "8mb" }), async (req, res) => {
   const raw = typeof req.body?.data === "string" ? req.body.data : "";
   const base64 = raw.startsWith("data:") ? raw.slice(raw.indexOf(",") + 1) : raw;
   if (!base64) {

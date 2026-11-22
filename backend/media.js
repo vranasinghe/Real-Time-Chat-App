@@ -6,6 +6,8 @@ const logger = require("./logger");
 const { authenticateToken } = require("./auth");
 const { detectImageType, MAX_IMAGE_BYTES } = require("./images");
 const { emitToMatch } = require("./realtime");
+const eligibility = require("./eligibility");
+const { requireEligible } = eligibility;
 
 const router = express.Router();
 const storiesRouter = express.Router();
@@ -26,7 +28,7 @@ function detectMediaType(bytes) {
 }
 
 const uploadLimiter = rateLimit({ windowMs: 10 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
-router.post("/", uploadLimiter, authenticateToken, express.raw({ type: () => true, limit: "25mb" }), async (req, res) => {
+router.post("/", uploadLimiter, authenticateToken, requireEligible, express.raw({ type: () => true, limit: "25mb" }), async (req, res) => {
   const purpose = req.query.purpose;
   const matchId = typeof req.query.matchId === "string" ? req.query.matchId : null;
   if (!["chat", "story"].includes(purpose)) return res.status(400).json({ error: "Choose chat or story media." });
@@ -62,7 +64,7 @@ router.post("/", uploadLimiter, authenticateToken, express.raw({ type: () => tru
 
 // No caches: access and the exact 12-hour deadline are checked on every request,
 // including video range requests. The bytes are never put in the public image store.
-router.get("/:id", authenticateToken, async (req, res) => {
+router.get("/:id", authenticateToken, requireEligible, async (req, res) => {
   res.set({ "Cache-Control": "private, no-store, max-age=0", "Cross-Origin-Resource-Policy": "cross-origin" });
   if (!UUID.test(req.params.id)) return res.sendStatus(404);
   try {
@@ -71,6 +73,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
        WHERE e.id = $1 AND e.expires_at > NOW() AND (
          (e.purpose = 'chat' AND EXISTS (SELECT 1 FROM matches m WHERE m.id = e.match_id AND (m.user_a = $2 OR m.user_b = $2)))
          OR (e.purpose = 'story' AND (e.owner_id = $2 OR (EXISTS (SELECT 1 FROM stories s WHERE s.media_id = e.id)
+           AND ${eligibility.candidateSql("p")}
            AND (p.is_demo = false OR EXISTS (SELECT 1 FROM profiles v WHERE v.id = $2 AND v.is_demo))))))`,
       [req.params.id, req.user.id]
     );
@@ -90,11 +93,11 @@ router.get("/:id", authenticateToken, async (req, res) => {
 
 const STORY_FIELDS = `s.id, s.user_id, p.name AS user_name, COALESCE(p.photos[1], '') AS user_avatar,
   '/api/media/' || e.id AS media_url, e.media_type, s.created_at, e.expires_at`;
-storiesRouter.use(authenticateToken);
+storiesRouter.use(authenticateToken, requireEligible);
 storiesRouter.get("/", async (req, res) => {
   try {
     const result = await db.query(`SELECT ${STORY_FIELDS} FROM stories s JOIN ephemeral_media e ON e.id = s.media_id JOIN profiles p ON p.id = s.user_id
-      WHERE e.expires_at > NOW() AND (p.is_demo = false OR EXISTS (SELECT 1 FROM profiles v WHERE v.id = $1 AND v.is_demo))
+      WHERE e.expires_at > NOW() AND (p.id = $1 OR ${eligibility.candidateSql("p")}) AND (p.is_demo = false OR EXISTS (SELECT 1 FROM profiles v WHERE v.id = $1 AND v.is_demo))
       ORDER BY s.created_at DESC LIMIT 200`, [req.user.id]);
     res.set("Cache-Control", "no-store").json(result.rows);
   } catch (err) { logger.error("story feed failed", err); res.status(500).json({ error: "Could not load statuses." }); }

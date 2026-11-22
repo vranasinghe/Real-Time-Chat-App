@@ -21,7 +21,7 @@ Web (Vercel, Expo web)   Android / iOS (Expo EAS)
 
 Docs: [Auth and deployment](docs/AUTH_AND_DEPLOYMENT.md) | [Audit and fixes](docs/AUDIT_AND_FIXES.md) | [Security review](docs/SECURITY_REVIEW.md) | [Testing and manual checklists](docs/TESTING_CHECKLIST.md)
 
-Quick start: copy `backend/.env.example` to `backend/.env` and `mobile/.env.example` to `mobile/.env`, then `npm run dev:backend` and `npm run dev:mobile`. Tests: `cd backend && npm test`; with a database, `node scripts/test-db.js start` and `TEST_DATABASE_URL=... npm run test:integration`.
+Quick start: copy `backend/.env.example` to `backend/.env` and `mobile/.env.example` to `mobile/.env`, then `npm run dev:backend` and `npm run dev:mobile`. Use Node 22 (`.nvmrc`; the same major version CI and Render use). Tests: `npm run test:all` from the repository root runs backend unit tests, the integration tests on a throwaway local PostgreSQL (it starts and stops it for you), the mobile type check, lint (0 warnings) and the web export; `npm run test:backend` runs only the database-free tests; `npm run test:e2e` runs the manual chat and image end-to-end scripts against a backend it starts itself on a throwaway local database (not part of CI); `npm run audit:report` prints a dependency vulnerability report. The authoritative database schema is `backend/db_init.sql` plus `backend/migrations/`; see `docs/implementation/DATABASE_MIGRATIONS.md` (destructive migrations are refused on non-local databases). Project plan and status: `docs/implementation/IMPLEMENTATION_TRACKER.md`.
 
 ## Status (what is and is not verified)
 
@@ -37,7 +37,7 @@ Quick start: copy `backend/.env.example` to `backend/.env` and `mobile/.env.exam
 | iOS | **Not done / not verified** |
 | Vercel proxy forwards the session cookie | **Not verified** until deployed |
 | Email verification / password reset delivery | **Not verified** (no email provider configured) |
-| Production deployment of these changes | **Not done**: nothing is committed or deployed |
+| Production deployment of these changes | **Not done**: the changes are committed locally (`2b8c384`, `b11eb4b`, `378eac8`, `47b8a13`, plus a documentation commit) but not pushed, and nothing is deployed |
 
 
 ## 🚀 Key Features
@@ -175,7 +175,7 @@ With `DEMO_LOGIN_ENABLED=true` on the backend, the welcome screen shows **Live D
 2. On device 2, tap **Live Demo** and pick **Elena**.
 3. Both land in the same chat and can message each other in real time.
 
-Alex and Elena are shared, pre-matched accounts created automatically on first use. They can't be logged into with a password, they never appear to real users in discovery, and their chat is trimmed to the last `DEMO_RETENTION_HOURS`. Everyone using the demo sees the same conversation, so turn it off (`DEMO_LOGIN_ENABLED` unset) once real users join.
+Alex and Elena are shared, pre-matched accounts created automatically on first use. They can't be logged into with a password, they never appear to real users in discovery, and their chat is trimmed to the last `DEMO_RETENTION_HOURS`. Everyone using the demo sees the same conversation, so it must never run on the real production service: the backend **ignores** `DEMO_LOGIN_ENABLED=true` when `NODE_ENV=production`/`RENDER` is set, unless `DEMO_ENVIRONMENT=isolated` is also set, which is for a **separate demo service with its own database** only. When the demo login is off, sessions already issued to Alex/Elena stop working too.
 
 Both devices must reach the backend: deploy it, or on the same Wi-Fi set `EXPO_PUBLIC_BACKEND_URL` to your computer's LAN address (for example `http://192.168.1.15:5000`) and allow the port through your firewall.
 

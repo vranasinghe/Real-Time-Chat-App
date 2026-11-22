@@ -21,6 +21,9 @@ const matches = require("./matches");
 const demo = require("./demo");
 const images = require("./images");
 const media = require("./media");
+const onboarding = require("./onboarding");
+const oauth = require("./oauth");
+const eligibility = require("./eligibility");
 
 const app = express();
 const server = http.createServer(app);
@@ -128,7 +131,9 @@ app.set("socketio", io);
 // Mount API endpoints
 app.use("/api/auth/demo", demo.router); // One-tap live demo login (DEMO_LOGIN_ENABLED=true)
 app.use("/api/auth", accountSecurity.router);
+app.use("/api/auth", oauth.router); // Google sign-in: state + PKCE + one-time code exchange
 app.use("/api/auth", auth.router);
+app.use("/api/onboarding", onboarding.router);
 app.use("/api/profiles", profiles);
 app.use("/api/swipes", swipes);
 app.use("/api/matches", matches);
@@ -172,7 +177,11 @@ io.use(async (socket, next) => {
   }
 
   try {
-    socket.data.userId = await session.authenticateSocketCredential(credential);
+    const { userId, account } = await session.authenticateSocket(credential);
+    // Real-time messaging is a dating feature: only eligible members may connect (suspended, banned and
+    // deleted accounts were already refused above).
+    if (!eligibility.evaluate(account).eligible) return next(new Error("not_eligible"));
+    socket.data.userId = userId;
     next();
   } catch (err) {
     next(new Error("Authentication token is invalid or expired"));
@@ -198,10 +207,13 @@ io.on("connection", (socket) => {
   socket.on("join_room", async (matchId) => {
     if (!matchId) return;
     try {
+      // Re-check on every join: the account may have changed since the socket connected.
+      const account = (await session.loadSession({ id: socket.data.userId, tv: socket.data.tv })).account;
       const result = await db.query(
         "SELECT 1 FROM matches WHERE id = $1 AND (user_a = $2 OR user_b = $2)",
         [matchId, socket.data.userId]
       );
+      if (!account || !eligibility.evaluate(account).eligible) return;
       if (result.rows.length === 0) {
         return;
       }

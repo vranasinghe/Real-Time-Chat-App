@@ -1,11 +1,9 @@
 import React, { useEffect } from "react";
-import { View, Text, Image, Pressable, Dimensions } from "react-native";
+import { View, Text, Image, Pressable, ScrollView } from "react-native";
 import { router, useRootNavigationState } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { useAppStore } from "@/lib/store";
 import { CONFIG_ERROR } from "@/lib/config";
-
-const { height } = Dimensions.get("window");
 
 export default function SplashScreen() {
   const { session, profileSetupComplete, isInitialized } = useAppStore();
@@ -23,7 +21,7 @@ export default function SplashScreen() {
         if (profileSetupComplete) {
           router.replace("/(tabs)");
         } else {
-          router.replace("/profile-setup/birthday");
+          router.replace("/profile-setup");
         }
       }, 50);
       return () => clearTimeout(timer);
@@ -32,12 +30,12 @@ export default function SplashScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#1A0F3D" }}>
-      <View className="flex-1 items-center justify-center px-8">
+      <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingVertical: 32 }}>
         {/* Logo & Brand Section */}
-        <View className="items-center justify-center" style={{ marginTop: -height * 0.04 }}>
+        <View className="items-center justify-center" style={{ width: "100%" }}>
           <Image
             source={require("../assets/images/logo.png")}
-            style={{ width: 300, height: 300, borderRadius: 60, overflow: "hidden" }}
+            style={{ width: "100%", maxWidth: 300, aspectRatio: 1, borderRadius: 60, overflow: "hidden" }}
             resizeMode="contain"
           />
 
@@ -63,7 +61,7 @@ export default function SplashScreen() {
             Get Started
           </Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </View>
   );
 }

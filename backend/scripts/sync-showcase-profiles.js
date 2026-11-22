@@ -7,6 +7,8 @@ const destination = path.join(__dirname, "../../mobile/assets/profiles");
 fs.mkdirSync(destination, { recursive: true });
 fs.copyFileSync(path.join(__dirname, "../data/showcase-profiles.json"), path.join(destination, "catalog.json"));
 for (const profile of profiles) {
-  fs.copyFileSync(path.join(__dirname, "../public/profiles", `${profile.key}.png`), path.join(destination, `${profile.key}.png`));
+  for (const file of profile.photo_files || [`${profile.key}.png`]) {
+    fs.copyFileSync(path.join(__dirname, "../public/profiles", file), path.join(destination, file));
+  }
 }
 console.log(`Synced ${profiles.length} showcase profiles and photos to the offline app.`);

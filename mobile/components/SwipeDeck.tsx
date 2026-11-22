@@ -5,7 +5,6 @@ import {
   StyleSheet,
   useWindowDimensions,
   Pressable,
-  Alert,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -16,7 +15,7 @@ import Animated, {
   runOnJS,
   interpolate,
 } from "react-native-reanimated";
-import { X, Heart, MessageSquare, MoreVertical } from "lucide-react-native";
+import { X, Heart, MessageSquare } from "lucide-react-native";
 import { Profile } from "@/lib/store";
 import { Image } from "expo-image";
 import { MAX_APP_WIDTH } from "@/lib/layout";
@@ -70,10 +69,11 @@ export function SwipeDeck({ profiles, onSwipe, onMessagePress, onViewProfile, on
       }
     });
 
+  const topProfileId = profiles[0]?.id;
   React.useEffect(() => {
     tx.value = withSpring(0);
     ty.value = withSpring(0);
-  }, [profiles[0]?.id]);
+  }, [topProfileId, tx, ty]);
 
   const triggerRight = () => {
     if (!profiles.length) return;
@@ -222,16 +222,7 @@ export function SwipeDeck({ profiles, onSwipe, onMessagePress, onViewProfile, on
                   </View>
                 </View>
 
-                {/* Top-right three-dot */}
-                <Pressable
-                  onPress={() =>
-                    Alert.alert("Options", "Report or Share this profile.")
-                  }
-                  style={styles.moreBtn}
-                  hitSlop={12}
-                >
-                  <MoreVertical size={18} color="#FFFFFF" />
-                </Pressable>
+                {/* The report / share menu is added with the safety features (Phase 2); until then no control is shown. */}
 
                 {/* Bottom info overlay */}
                 <View style={styles.infoOverlay}>

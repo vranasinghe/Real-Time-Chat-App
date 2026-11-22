@@ -13,11 +13,21 @@ export interface Profile {
   height_cm: number;
   interests: string[];
   photos: string[];
-  lat?: number;
-  lng?: number;
   is_online: boolean;
   match_percent?: number;
   swipe_message?: string;
+  // Account state, as computed by the server for the signed-in member (never trust the client's own idea of it)
+  status?: string;
+  email_verified?: boolean;
+  profile_completed_at?: string | null;
+  relationship_intention?: string | null;
+  eligibility?: Eligibility;
+}
+
+/** Whether dating features are open for this member, with the reasons when they are not. */
+export interface Eligibility {
+  eligible: boolean;
+  reasons: string[];
 }
 
 export interface Swipe {

@@ -6,12 +6,14 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node --test test/session.test.js test/units.test.js test/showcase.test.js",
+    "test": "node --test test/session.test.js test/units.test.js test/showcase.test.js test/dbSafety.test.js test/demoConfig.test.js test/age.test.js test/eligibility.test.js test/oauth.test.js",
     "test:integration": "node --test --test-concurrency=1 test/integration.test.js",
     "test:session": "node --test test/session.test.js",
     "test:chat": "node test/chat.e2e.js",
     "test:images": "node test/images.e2e.js",
-    "images:import": "node scripts/import-images.js"
+    "images:import": "node scripts/import-images.js",
+    "test:integration:local": "node scripts/run-integration.js",
+    "test:e2e:local": "node scripts/run-e2e.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -29,6 +31,6 @@
     "socket.io-client": "^4.8.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22 <23"
   }
 }

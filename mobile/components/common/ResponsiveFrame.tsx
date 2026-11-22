@@ -6,9 +6,10 @@ import { MAX_APP_WIDTH } from "@/lib/layout";
 
 // Shows while a signed-in user's live connection is down (offline, server waking up,
 // app just resumed). Chat keeps working from saved data and catches up on reconnect.
+// Members who are still setting up their profile have no live connection by design, so no banner.
 function ConnectionBanner() {
   const insets = useSafeAreaInsets();
-  const show = useAppStore((s) => s.isInitialized && s.session && !s.isDemo && !s.socketConnected);
+  const show = useAppStore((s) => s.isInitialized && s.session && !s.isDemo && s.profileSetupComplete && !s.socketConnected);
   if (!show) return null;
   return (
     <View
@@ -38,10 +39,11 @@ export function ResponsiveFrame({ children }: { children: React.ReactNode }) {
   const wide = width > MAX_APP_WIDTH;
 
   return (
-    <View style={{ flex: 1, backgroundColor: wide ? "#07030F" : "#0E0720", alignItems: "center" }}>
+    <View style={{ flex: 1, minHeight: 0, backgroundColor: wide ? "#07030F" : "#0E0720", alignItems: "center" }}>
       <View
         style={{
           flex: 1,
+          minHeight: 0,
           width: "100%",
           maxWidth: MAX_APP_WIDTH,
           overflow: "hidden",

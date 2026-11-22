@@ -4,6 +4,7 @@ const db = require("./db");
 const logger = require("./logger");
 const { authenticateToken } = require("./auth");
 const { emitToMatch } = require("./realtime");
+const eligibility = require("./eligibility");
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ function validateSwipe(body, swiperId) {
 
 // Route: Record a swipe (like/pass/super). The swipe, the match and the opening
 // messages are written in ONE transaction, so a failure cannot leave half a match behind.
-router.post("/", authenticateToken, async (req, res) => {
+router.post("/", authenticateToken, eligibility.requireEligible, async (req, res) => {
   const swiper_id = req.user.id;
   const input = validateSwipe(req.body, swiper_id);
   if (input.error) return res.status(400).json({ error: input.error });
@@ -42,6 +43,11 @@ router.post("/", authenticateToken, async (req, res) => {
 
   try {
     const outcome = await db.withTransaction(async (q) => {
+      // Only eligible members can be swiped on; anyone else (incomplete, underage, suspended, unknown)
+      // looks exactly like a profile that does not exist.
+      const target = await q(`SELECT 1 FROM profiles p WHERE p.id = $1 AND ${eligibility.candidateSql("p")}`, [swipee_id]);
+      if (target.rows.length === 0) return { unavailable: true };
+
       await q(
         `INSERT INTO swipes (swiper_id, swipee_id, direction, message)
          VALUES ($1, $2, $3, $4)
@@ -87,6 +93,8 @@ router.post("/", authenticateToken, async (req, res) => {
       return { match, activeMatch: other.rows.length ? { match, profile: other.rows[0] } : null };
     });
 
+    if (outcome.unavailable) return res.status(404).json({ error: "That profile no longer exists" });
+
     // Tell both people only after the transaction committed
     if (outcome.match) {
       emitToMatch(req.app.get("socketio"), outcome.match, "match_created", { match_id: outcome.match.id });
@@ -103,7 +111,7 @@ router.post("/", authenticateToken, async (req, res) => {
 });
 
 // Route: Reset swipes (equivalent to start over)
-router.post("/reset", authenticateToken, async (req, res) => {
+router.post("/reset", authenticateToken, eligibility.requireEligible, async (req, res) => {
   const userId = req.user.id;
   try {
     await db.query("DELETE FROM swipes WHERE swiper_id = $1", [userId]);

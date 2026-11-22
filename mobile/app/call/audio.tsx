@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, Pressable, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import { MicOff, Volume2, PhoneOff, User } from "lucide-react-native";
+import { router, Redirect } from "expo-router";
+import { FEATURES } from "@/lib/features";
+import { MicOff, Volume2, PhoneOff } from "lucide-react-native";
 
-export default function AudioCallScreen() {
+function AudioCallScreenImpl() {
   const [seconds, setSeconds] = useState(0);
 
   // Timer stopwatch logic
@@ -78,4 +79,10 @@ export default function AudioCallScreen() {
       </View>
     </SafeAreaView>
   );
+}
+
+// Calling is not implemented (no signalling, media or TURN). The route stays unreachable until FEATURES.calls is true.
+export default function AudioCallScreen() {
+  if (!FEATURES.calls) return <Redirect href="/(tabs)/chat" />;
+  return <AudioCallScreenImpl />;
 }

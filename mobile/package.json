@@ -12,6 +12,7 @@
     "expo-asset": "~12.0.13",
     "expo-av": "^16.0.8",
     "expo-constants": "~18.0.13",
+    "expo-crypto": "~15.0.9",
     "expo-device": "~8.0.10",
     "expo-file-system": "~19.0.23",
     "expo-font": "~14.0.12",
@@ -61,7 +62,12 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
+    "export:web": "expo export --platform web"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=22 <23"
+  }
 }
