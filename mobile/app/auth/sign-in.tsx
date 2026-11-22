@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, Alert, Image, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, Image, ActivityIndicator } from "react-native";
 import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Eye, EyeOff, ArrowLeft } from "lucide-react-native";
+import { ArrowLeft } from "lucide-react-native";
 import { useAppStore } from "@/lib/store";
 import type { LiveDemoPersona } from "@/lib/types";
-import { PrimaryButton, GhostButton } from "@/components/PrimaryButton";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { TextField } from "@/components/TextField";
 import Svg, { Path } from "react-native-svg";
 
@@ -27,15 +27,6 @@ const GoogleIcon = () => (
     <Path
       fill="#EA4335"
       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-    />
-  </Svg>
-);
-
-const FacebookIcon = () => (
-  <Svg width={20} height={20} viewBox="0 0 24 24">
-    <Path
-      fill="#1877F2"
-      d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
     />
   </Svg>
 );
@@ -70,7 +61,7 @@ export default function SignInScreen() {
     setDemoLoading(key);
     try {
       await signInLiveDemo(key);
-      router.replace(useAppStore.getState().profileSetupComplete ? "/(tabs)" : "/profile-setup/birthday");
+      router.replace(useAppStore.getState().profileSetupComplete ? "/(tabs)" : "/profile-setup");
     } catch (e: any) {
       setError(e?.message || "Demo sign-in failed. Please try again.");
       setDemoLoading(null);
@@ -88,7 +79,7 @@ export default function SignInScreen() {
         if (setupComplete) {
           router.replace("/(tabs)");
         } else {
-          router.replace("/profile-setup/birthday");
+          router.replace("/profile-setup");
         }
       }
     } catch (e: any) {
@@ -109,7 +100,7 @@ export default function SignInScreen() {
       setLoading(false);
       if (success) {
         // New accounts that never finished onboarding continue the setup wizard
-        router.replace(useAppStore.getState().profileSetupComplete ? "/(tabs)" : "/profile-setup/birthday");
+        router.replace(useAppStore.getState().profileSetupComplete ? "/(tabs)" : "/profile-setup");
       } else {
         setError("Invalid email or password");
       }
@@ -205,13 +196,6 @@ export default function SignInScreen() {
                 <Text className="text-white font-sans font-semibold text-[15px] ml-2">Google</Text>
               </Pressable>
 
-              <Pressable
-                onPress={() => Alert.alert("Facebook Auth", "Facebook Sign In triggered.")}
-                className="flex-1 flex-row bg-bg-surface border border-text-secondary/10 active:bg-text-secondary/5 rounded-2xl py-3.5 items-center justify-center"
-              >
-                <FacebookIcon />
-                <Text className="text-white font-sans font-semibold text-[15px] ml-2">Facebook</Text>
-              </Pressable>
             </View>
           </View>
 

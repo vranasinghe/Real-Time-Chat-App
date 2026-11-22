@@ -28,15 +28,6 @@ const GoogleIcon = () => (
   </Svg>
 );
 
-const FacebookIcon = () => (
-  <Svg width={20} height={20} viewBox="0 0 24 24">
-    <Path
-      fill="#1877F2"
-      d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
-    />
-  </Svg>
-);
-
 export default function GetStartedScreen() {
   const signInWithGoogle = useAppStore((state) => state.signInWithGoogle);
 
@@ -48,7 +39,7 @@ export default function GetStartedScreen() {
         if (setupComplete) {
           router.replace("/(tabs)");
         } else {
-          router.replace("/profile-setup/birthday");
+          router.replace("/profile-setup");
         }
       }
     } catch (e: any) {
@@ -106,17 +97,6 @@ export default function GetStartedScreen() {
               </Text>
             </Pressable>
 
-            {/* Facebook button */}
-            <Pressable
-              onPress={() => Alert.alert("Facebook Auth", "Facebook Sign Up flow triggered.")}
-              style={{ marginTop: 16 }}
-              className="w-full border border-white/10 bg-bg-surface/30 active:bg-white/5 rounded-[28px] py-4 px-6 flex-row items-center justify-center"
-            >
-              <FacebookIcon />
-              <Text className="text-white font-sans font-semibold text-[16px] ml-3">
-                Sign Up with Facebook
-              </Text>
-            </Pressable>
           </View>
 
           {/* Sign In Footer */}

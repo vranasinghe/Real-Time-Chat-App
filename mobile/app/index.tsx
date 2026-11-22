@@ -23,7 +23,7 @@ export default function SplashScreen() {
         if (profileSetupComplete) {
           router.replace("/(tabs)");
         } else {
-          router.replace("/profile-setup/birthday");
+          router.replace("/profile-setup");
         }
       }, 50);
       return () => clearTimeout(timer);

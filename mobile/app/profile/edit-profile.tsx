@@ -13,8 +13,7 @@ export default function EditProfileScreen() {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [name, setName] = useState(user?.name || "");
   const [bio, setBio] = useState(user?.bio || "");
-  const [email, setEmail] = useState(user?.email || "");
-  const [phone, setPhone] = useState("+1 (555) 019-2834");
+  const email = user?.email || ""; // shown for reference; changing the sign-in email is not supported yet
   const [gender, setGender] = useState(user?.gender || "male");
   const [lookingFor, setLookingFor] = useState(user?.looking_for || "female");
   const [loading, setLoading] = useState(false);
@@ -53,7 +52,7 @@ export default function EditProfileScreen() {
       Alert.alert("Success", "Profile updated successfully!", [
         { text: "OK", onPress: () => router.back() }
       ]);
-    } catch (e) {
+    } catch {
       setLoading(false);
       Alert.alert("Error", "Failed to update profile");
     }
@@ -124,20 +123,11 @@ export default function EditProfileScreen() {
           />
 
           <TextField
-            label="Email Address"
-            placeholder="Enter your email"
+            label="Email Address (cannot be changed here)"
             value={email}
-            onChangeText={setEmail}
+            editable={false}
             keyboardType="email-address"
             autoCapitalize="none"
-          />
-
-          <TextField
-            label="Phone Number"
-            placeholder="Enter your phone number"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
           />
 
           {/* Gender selection */}

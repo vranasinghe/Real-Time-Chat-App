@@ -17,12 +17,21 @@ const needsRehash = (hash) => {
   }
 };
 
-/** Returns an error message, or null when the password is acceptable. */
+const STRENGTH_MESSAGE = "Use an upper and a lower case letter, a number and a symbol";
+
+/**
+ * Returns an error message, or null when the password is acceptable.
+ * Same rule as the checklist in the app (mobile/lib/validation.ts): 8 to 72 characters, an upper and a
+ * lower case letter, a number and a symbol. The server enforces it; the app only previews it.
+ */
 function passwordProblem(password) {
   if (typeof password !== "string" || password.length < MIN_LENGTH) {
     return `Password must be at least ${MIN_LENGTH} characters long`;
   }
   if (password.length > MAX_LENGTH) return `Password must be at most ${MAX_LENGTH} characters long`;
+  if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+    return STRENGTH_MESSAGE;
+  }
   return null;
 }
 

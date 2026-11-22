@@ -5,6 +5,7 @@ import { io } from "socket.io-client";
 import type { Socket } from "socket.io-client";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
+import * as Crypto from "expo-crypto";
 
 import { DEMO_USER, DEMO_PROFILES, DEMO_LIKES_YOU } from "./demoData";
 import { BACKEND_URL, CONFIG_ERROR, IS_WEB, resolveMediaUrl } from "./config";
@@ -103,7 +104,9 @@ interface AppState {
   fetchMatches: () => Promise<void>;
   fetchLikesYou: () => Promise<void>;
   signIn: (email: string, pass: string) => Promise<boolean>;
-  signUp: (email: string, pass: string, name: string) => Promise<boolean>;
+  signUp: (email: string, pass: string, name: string, birthdate: string, policies: { terms: string; privacy: string }) => Promise<boolean>;
+  /** Re-reads the member from the server (verification status, eligibility) and opens real-time if now eligible. */
+  refreshProfile: () => Promise<void>;
   signInWithGoogle: () => Promise<boolean>;
   enterDemoMode: () => Promise<void>;
   getLiveDemoStatus: () => Promise<LiveDemoStatus>;
@@ -139,6 +142,26 @@ interface AppState {
 }
 
 
+
+// Dating features are open only when the SERVER says so (eligibility from /api/auth/me, login, ...).
+const isEligible = (u?: Profile | null) => !!u?.eligibility?.eligible;
+
+// PKCE helpers for the Google sign-in (the verifier never leaves the device except in the final exchange).
+const toHex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+async function makePkce() {
+  const verifier = toHex(await Crypto.getRandomBytesAsync(48)); // 96 characters, all unreserved
+  const base64 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, verifier, { encoding: Crypto.CryptoEncoding.BASE64 });
+  const challenge = base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return { verifier, challenge };
+}
+
+const GOOGLE_ERRORS: Record<string, string> = {
+  access_denied: "Google sign-in was cancelled.",
+  account_suspended: "This account is suspended.",
+  account_banned: "This account has been closed for breaking the community rules.",
+  account_closed: "This account is closed.",
+  sign_in_failed: "Google sign-in failed. Make sure your Google address is verified and try again.",
+};
 
 // A real (backend-backed) session: signed in and not the offline demo
 const isLiveSession = (s: { session: boolean; isDemo: boolean }) => s.session && !s.isDemo;
@@ -236,11 +259,13 @@ async function verifySession() {
     const profile = await apiJson<Profile>("/api/auth/me", { retry: true });
     useAppStore.setState({
       user: withMedia(profile),
-      profileSetupComplete: !!profile.name && !!profile.birthdate,
+      profileSetupComplete: isEligible(profile),
     });
     const store = useAppStore.getState();
     store.getSocketConnection();
-    await Promise.all([store.fetchMatches(), store.fetchDiscoveryProfiles(), store.fetchLikesYou(), store.fetchStories()]);
+    if (isEligible(profile)) {
+      await Promise.all([store.fetchMatches(), store.fetchDiscoveryProfiles(), store.fetchLikesYou(), store.fetchStories()]);
+    }
   } catch (e) {
     if (e instanceof ApiError && e.kind === "http" && (e.status === 401 || e.status === 404)) {
       await clearSessionLocal();
@@ -266,26 +291,7 @@ export const useAppStore = create<AppState>()(
       swipes: [],
       matches: [],
       messages: [],
-      stories: [
-        {
-          id: "story-mock-liana-1",
-          user_id: "seed-liana",
-          user_name: "Liana Ray",
-          user_avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-          media_url: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=600&auto=format&fit=crop&q=80",
-          media_type: "image",
-          created_at: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: "story-mock-elena-1",
-          user_id: "seed-elena",
-          user_name: "Elena",
-          user_avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
-          media_url: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&auto=format&fit=crop&q=80",
-          media_type: "image",
-          created_at: new Date(Date.now() - 7200000).toISOString(),
-        }
-      ],
+      stories: [],
       activeMatch: null,
       threads: {},
       activeThreadId: null,
@@ -419,21 +425,31 @@ export const useAppStore = create<AppState>()(
             body: JSON.stringify({ email: email.trim(), password }),
             retry: true,
           });
-          await establishSession(data, !!data.user.name && !!data.user.birthdate);
-          await get().fetchMatches();
+          await establishSession(data, isEligible(data.user));
+          if (isEligible(data.user)) await get().fetchMatches();
           return true;
         });
       },
 
-      signUp: async (email, password, name) => {
+      signUp: async (email, password, name, birthdate, policies) => {
         return runExclusiveAuth(async () => {
           const data = await apiJson<{ token?: string; user: Profile }>("/api/auth/register", {
             method: "POST",
-            body: JSON.stringify({ email: email.trim(), password, name: name.trim() }),
+            body: JSON.stringify({ email: email.trim(), password, name: name.trim(), birthdate, accepted_policies: policies }),
           });
-          await establishSession(data, false);
+          await establishSession(data, isEligible(data.user));
           return true;
         });
+      },
+
+      refreshProfile: async () => {
+        if (!isLiveSession(get())) return;
+        const profile = await apiJson<Profile>("/api/auth/me");
+        set({ user: withMedia(profile), profileSetupComplete: isEligible(profile) });
+        if (isEligible(profile)) {
+          get().getSocketConnection();
+          await Promise.all([get().fetchMatches(), get().fetchDiscoveryProfiles(), get().fetchLikesYou(), get().fetchStories()]);
+        }
       },
 
       signInWithGoogle: async () => {
@@ -442,22 +458,30 @@ export const useAppStore = create<AppState>()(
           throw new Error("Google sign-in is not available on the web version yet. Please use email and password.");
         }
         return runExclusiveAuth(async () => {
+          // 1. PKCE: only the challenge goes to the server now; the verifier stays here until the exchange.
+          const { verifier, challenge } = await makePkce();
           const redirectUrl = Linking.createURL("auth-callback");
           const { url } = await apiJson<{ url: string }>(
-            `/api/auth/google/url?redirect_uri=${encodeURIComponent(redirectUrl)}`
+            `/api/auth/google/url?redirect_uri=${encodeURIComponent(redirectUrl)}&code_challenge=${challenge}&code_challenge_method=S256`
           );
 
           const result = await WebBrowser.openAuthSessionAsync(url, redirectUrl);
           if (result.type !== "success" || !result.url) return false;
 
+          // 2. The redirect carries ONLY a short-lived one-time code (or an error), never a token or a profile.
           const parsed = Linking.parse(result.url);
-          const token = parsed.queryParams?.token;
-          const userStr = parsed.queryParams?.user;
-          if (typeof token !== "string" || typeof userStr !== "string") return false;
+          const error = parsed.queryParams?.error;
+          if (typeof error === "string") throw new Error(GOOGLE_ERRORS[error] || "Google sign-in failed.");
+          const code = parsed.queryParams?.code;
+          if (typeof code !== "string") return false;
 
-          const userObj = JSON.parse(userStr) as Profile;
-          await establishSession({ token, user: userObj }, !!userObj.name && !!userObj.birthdate);
-          await get().fetchMatches();
+          // 3. Trade the code (plus the PKCE verifier) for the real session.
+          const data = await apiJson<{ token?: string; user: Profile }>("/api/auth/oauth/exchange", {
+            method: "POST",
+            body: JSON.stringify({ code, code_verifier: verifier }),
+          });
+          await establishSession(data, isEligible(data.user));
+          if (isEligible(data.user)) await get().fetchMatches();
           return true;
         });
       },
@@ -496,10 +520,12 @@ export const useAppStore = create<AppState>()(
             method: "POST",
             body: JSON.stringify({ persona }),
           });
-          await establishSession(data, true);
-          await get().fetchMatches();
-          get().fetchDiscoveryProfiles();
-          get().fetchLikesYou();
+          await establishSession(data, isEligible(data.user));
+          if (isEligible(data.user)) {
+            await get().fetchMatches();
+            get().fetchDiscoveryProfiles();
+            get().fetchLikesYou();
+          }
           return true;
         });
       },
@@ -541,14 +567,16 @@ export const useAppStore = create<AppState>()(
               body: JSON.stringify(profileData),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Profile setup update failed");
+            if (!res.ok) throw new Error(data.error || "Profile update failed");
             
+            // Completion is decided by the server (eligibility), never by this call succeeding.
             set({
               user: withMedia(data.user),
-              profileSetupComplete: true,
+              profileSetupComplete: isEligible(data.user),
             });
           } catch (e) {
-            console.error("Failed to sync setup wizard to backend:", e);
+            console.error("Failed to save the profile:", e);
+            throw e;
           }
         } else {
           set({
@@ -939,7 +967,8 @@ export const useAppStore = create<AppState>()(
       setActiveThread: (matchId) => set({ activeThreadId: matchId }),
 
       getSocketConnection: () => {
-        if (!isLiveSession(get()) || CONFIG_ERROR) {
+        // Real-time messaging only opens for members the server says are eligible.
+        if (!isLiveSession(get()) || CONFIG_ERROR || !get().profileSetupComplete) {
           disconnectSocket();
           return null;
         }

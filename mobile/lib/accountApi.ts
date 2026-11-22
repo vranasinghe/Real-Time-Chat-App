@@ -5,7 +5,10 @@ import { apiJson } from "./api";
 
 export interface AuthConfig {
   emailVerification: boolean;
+  emailVerificationRequired?: boolean;
   passwordReset: boolean;
+  /** The policy versions a new member must accept (undefined when the server could not be reached). */
+  policies?: { terms: string; privacy: string };
 }
 
 /** What this server offers. If it can't be reached, assume nothing is available. */

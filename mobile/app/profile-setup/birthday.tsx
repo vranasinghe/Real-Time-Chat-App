@@ -1,143 +1,72 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView, Alert } from "react-native";
-import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { View, Text } from "react-native";
 import { Calendar } from "lucide-react-native";
-import { useAppStore } from "@/lib/store";
-import { PrimaryButton, GhostButton } from "@/components/PrimaryButton";
+import { OnboardingShell, goToNextStep } from "@/components/onboarding/OnboardingShell";
 import { TextField } from "@/components/TextField";
+import { useOnboarding } from "@/lib/onboardingStore";
+import { validateBirthdate } from "@/lib/age";
 
 export default function BirthdaySetupScreen() {
+  const { state, save } = useOnboarding();
   const [day, setDay] = useState("");
   const [month, setMonth] = useState("");
   const [year, setYear] = useState("");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const completeSetup = useAppStore((state) => state.completeSetup);
+  // Show what was saved before (resume), but never a value the app guessed: the server hides those.
+  useEffect(() => {
+    const saved = state?.profile.birthdate;
+    if (saved) {
+      const [y, m, d] = saved.slice(0, 10).split("-");
+      setYear(y);
+      setMonth(m);
+      setDay(d);
+    }
+  }, [state?.profile.birthdate]);
 
-  const handleNext = async () => {
-    if (!day || !month || !year) {
-      setError("Please fill in your complete birthdate");
+  const submit = async () => {
+    // Quick feedback here; the server checks the date again and has the final say.
+    const iso = `${year.padStart(4, "0")}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    const check = validateBirthdate(iso);
+    if (!check.ok) {
+      setError(check.message);
       return;
     }
-
-    const dayNum = parseInt(day);
-    const monthNum = parseInt(month);
-    const yearNum = parseInt(year);
-
-    if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) {
-      setError("Invalid day");
-      return;
-    }
-    if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
-      setError("Invalid month");
-      return;
-    }
-    if (isNaN(yearNum) || yearNum < 1920 || yearNum > 2008) {
-      setError("You must be at least 18 years old to join Dateza");
-      return;
-    }
-
+    setLoading(true);
     setError("");
-    const birthdateString = `${yearNum}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-    
-    // Save locally or sync to Supabase
-    // Note: completeSetup will be final at the end of the wizard, for now we pass intermediate values or update the local user session
-    // We can update the store state directly
-    useAppStore.setState((state) => {
-      if (state.user) {
-        return { user: { ...state.user, birthdate: birthdateString } };
-      }
-      return {};
-    });
-
-    router.push("/profile-setup/height");
+    try {
+      goToNextStep(await save("birthday", { birthdate: iso }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save your date of birth.");
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const locked = state?.birthdate_locked && !state?.underage;
+
   return (
-    <SafeAreaView className="flex-1 bg-bg-base">
-      <KeyboardAvoid>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }} className="px-6 py-6">
-        <View className="w-full">
-          
-          {/* Header */}
-          <View className="mt-8 mb-10">
-            <Text className="text-white text-3xl font-bold font-display tracking-tight mb-2">
-              {"When's your Birthday?"}
-            </Text>
-            <Text className="text-text-secondary text-base font-sans leading-6">
-              {"Your age will be visible to your matches, but we don't display your actual birth date."}
-            </Text>
-          </View>
-
-          {/* Form / Grid Picker */}
-          <View>
-            {error ? (
-              <View className="bg-like/10 border border-like/25 rounded-2xl p-4 mb-6">
-                <Text className="text-like font-sans text-[14px] font-medium text-center">
-                  {error}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Inputs in 3-column row */}
-            <View className="flex-row space-x-3.5 mb-6">
-              <View className="flex-1">
-                <TextField
-                  label="Day"
-                  placeholder="DD"
-                  value={day}
-                  onChangeText={setDay}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                />
-              </View>
-              <View className="flex-1">
-                <TextField
-                  label="Month"
-                  placeholder="MM"
-                  value={month}
-                  onChangeText={setMonth}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                />
-              </View>
-              <View className="flex-1">
-                <TextField
-                  label="Year"
-                  placeholder="YYYY"
-                  value={year}
-                  onChangeText={setYear}
-                  keyboardType="number-pad"
-                  maxLength={4}
-                />
-              </View>
-            </View>
-
-            <View className="flex-row items-center space-x-2 bg-bg-surface border border-white/5 p-4 rounded-2xl mt-4">
-              <Calendar size={20} color="#9A8FB8" />
-              <Text className="text-text-secondary font-sans text-[13px] leading-5">
-                Must be at least 18 years old to join Dateza.
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Actions */}
-        <View className="w-full space-y-3.5 pb-4 mt-8">
-          <PrimaryButton
-            label="Next"
-            onPress={handleNext}
-          />
-          <GhostButton
-            label="Skip"
-            onPress={() => router.push("/profile-setup/height")}
-          />
-        </View>
-
-      </ScrollView>
-      </KeyboardAvoid>
-    </SafeAreaView>
+    <OnboardingShell
+      step="birthday"
+      title="When's your birthday?"
+      subtitle="Your age will be visible to others, but not your actual birth date."
+      onNext={submit}
+      loading={loading}
+      error={error}
+      canNext={!locked && day.length > 0 && month.length > 0 && year.length === 4}
+    >
+      <View className="flex-row" style={{ gap: 14 }}>
+        <View className="flex-1"><TextField label="Day" placeholder="DD" value={day} onChangeText={setDay} keyboardType="number-pad" maxLength={2} editable={!locked} /></View>
+        <View className="flex-1"><TextField label="Month" placeholder="MM" value={month} onChangeText={setMonth} keyboardType="number-pad" maxLength={2} editable={!locked} /></View>
+        <View className="flex-1"><TextField label="Year" placeholder="YYYY" value={year} onChangeText={setYear} keyboardType="number-pad" maxLength={4} editable={!locked} /></View>
+      </View>
+      <View className="flex-row items-center bg-bg-surface border border-white/5 p-4 rounded-2xl mt-2" style={{ gap: 8 }}>
+        <Calendar size={20} color="#9A8FB8" />
+        <Text className="flex-1 text-text-secondary font-sans text-[13px] leading-5">
+          {locked ? "Your date of birth can't be changed after setup. Contact support if it is wrong." : "You must be at least 18 years old to join Dateza."}
+        </Text>
+      </View>
+    </OnboardingShell>
   );
 }

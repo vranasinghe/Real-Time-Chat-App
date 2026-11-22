@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView } from "react-native";
 import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
 import { isStrongPassword, isValidEmail } from "@/lib/validation";
 import { getAuthConfig } from "@/lib/accountApi";
@@ -9,6 +9,8 @@ import { useAppStore } from "@/lib/store";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { TextField } from "@/components/TextField";
 import { PasswordStrengthChecklist } from "@/components/PasswordStrengthChecklist";
+import { validateBirthdate } from "@/lib/age";
+import { Check } from "lucide-react-native";
 import Svg, { Path } from "react-native-svg";
 
 const GoogleIcon = () => (
@@ -32,28 +34,14 @@ const GoogleIcon = () => (
   </Svg>
 );
 
-const FacebookIcon = () => (
-  <Svg width={20} height={20} viewBox="0 0 24 24">
-    <Path
-      fill="#1877F2"
-      d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
-    />
-  </Svg>
-);
-
-const AppleIcon = () => (
-  <Svg width={20} height={20} viewBox="0 0 24 24">
-    <Path
-      fill="#FFFFFF"
-      d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.5-1.34.02-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.19-3.14-2.41C4.25 16.91 2.94 11.85 4.6 8.95A5.07 5.07 0 0 1 8.8 6.38c1.31 0 2.55.9 3.36.9.82 0 2.25-1.11 3.8-.95a5.22 5.22 0 0 1 4.19 2.25c-.26.16-3.1 1.8-3.07 5.35.03 4.22 3.66 5.67 3.69 5.68a11.15 11.15 0 0 1-2.06 3.49M15.95 4.17a5 5 0 0 0 1.21-2.67 5.13 5.13 0 0 0-3.36 1.73 4.79 4.79 0 0 0-1.22 2.57 4.54 4.54 0 0 0 3.37-1.63z"
-    />
-  </Svg>
-);
-
 export default function CreateAccountScreen() {
   const [fullName, setFullName] = useState("");
   const [emailOrPhone, setEmailOrPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [day, setDay] = useState("");
+  const [month, setMonth] = useState("");
+  const [year, setYear] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
@@ -68,11 +56,7 @@ export default function CreateAccountScreen() {
       setLoading(false);
       if (success) {
         const setupComplete = useAppStore.getState().profileSetupComplete;
-        if (setupComplete) {
-          router.replace("/(tabs)");
-        } else {
-          router.replace("/profile-setup/birthday");
-        }
+        router.replace(setupComplete ? "/(tabs)" : "/profile-setup");
       }
     } catch (e: any) {
       setLoading(false);
@@ -99,16 +83,33 @@ export default function CreateAccountScreen() {
       return;
     }
 
+    // The date of birth is checked here for quick feedback; the server checks it again and decides.
+    const iso = `${year.padStart(4, "0")}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    const dob = validateBirthdate(iso);
+    if (!dob.ok) {
+      setError(dob.message);
+      return;
+    }
+    if (!accepted) {
+      setError("Please accept the Terms of Service and the Privacy Policy to continue.");
+      return;
+    }
+
     setError("");
     setLoading(true);
 
     try {
-      const success = await signUpStore(emailOrPhone, password, fullName);
+      const { policies } = await getAuthConfig();
+      if (!policies) {
+        setLoading(false);
+        setError("Can't reach the server. Check your connection and try again.");
+        return;
+      }
+      const success = await signUpStore(emailOrPhone, password, fullName, iso, policies);
       setLoading(false);
       if (success) {
-        // Email verification only when the server can really send email
-        const { emailVerification } = await getAuthConfig();
-        router.push(emailVerification ? "/auth/verify-code" : "/profile-setup/birthday");
+        // The server decides what is still missing (e-mail code, photos, ...) and onboarding resumes from there.
+        router.replace("/profile-setup");
       } else {
         setError("Sign up failed. Please try again.");
       }
@@ -173,6 +174,41 @@ export default function CreateAccountScreen() {
             <View className="mt-3">
               <PasswordStrengthChecklist password={password} />
             </View>
+
+            <Text className="text-text-secondary font-sans font-medium text-[14px] mt-5 mb-2">Date of birth</Text>
+            <View className="flex-row" style={{ gap: 12 }}>
+              <View className="flex-1">
+                <TextField label="Day" placeholder="DD" value={day} onChangeText={setDay} keyboardType="number-pad" maxLength={2} />
+              </View>
+              <View className="flex-1">
+                <TextField label="Month" placeholder="MM" value={month} onChangeText={setMonth} keyboardType="number-pad" maxLength={2} />
+              </View>
+              <View className="flex-1">
+                <TextField label="Year" placeholder="YYYY" value={year} onChangeText={setYear} keyboardType="number-pad" maxLength={4} />
+              </View>
+            </View>
+            <Text className="text-text-secondary font-sans text-[12px] leading-5 -mt-1 mb-2">
+              You must be at least 18. Your birth date is never shown to others, only your age.
+            </Text>
+
+            <Pressable
+              onPress={() => setAccepted((v) => !v)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: accepted }}
+              accessibilityLabel="I am 18 or older and accept the Terms of Service and the Privacy Policy"
+              className="flex-row items-start mt-3"
+            >
+              <View className={`w-6 h-6 rounded-md border items-center justify-center mr-3 mt-0.5 ${accepted ? "bg-primary border-primary" : "border-text-secondary/40"}`}>
+                {accepted ? <Check size={14} color="#FFFFFF" strokeWidth={3} /> : null}
+              </View>
+              <Text className="flex-1 text-text-secondary font-sans text-[13px] leading-5">
+                I am 18 or older and I accept the{" "}
+                <Text className="text-primary underline" onPress={() => router.push("/profile/terms")}>Terms of Service</Text>
+                {" "}and the{" "}
+                <Text className="text-primary underline" onPress={() => router.push("/profile/privacy-policy")}>Privacy Policy</Text>
+                . Both are drafts that are still being reviewed.
+              </Text>
+            </Pressable>
           </View>
 
           {/* Sign Up Actions */}
@@ -201,21 +237,6 @@ export default function CreateAccountScreen() {
                 <GoogleIcon />
               </Pressable>
 
-              <Pressable
-                onPress={() => Alert.alert("Apple Auth", "Apple Sign Up triggered.")}
-                style={{ width: 64, height: 54 }}
-                className="bg-bg-surface border border-text-secondary/10 active:bg-text-secondary/5 rounded-2xl items-center justify-center"
-              >
-                <AppleIcon />
-              </Pressable>
-
-              <Pressable
-                onPress={() => Alert.alert("Facebook Auth", "Facebook Sign Up triggered.")}
-                style={{ width: 64, height: 54 }}
-                className="bg-bg-surface border border-text-secondary/10 active:bg-text-secondary/5 rounded-2xl items-center justify-center"
-              >
-                <FacebookIcon />
-              </Pressable>
             </View>
           </View>
 

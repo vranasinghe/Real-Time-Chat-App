@@ -4,6 +4,14 @@ const db = require("./db");
 const logger = require("./logger");
 const { authenticateToken } = require("./auth");
 const { emitToMatch } = require("./realtime");
+const eligibility = require("./eligibility");
+const { requireEligible } = eligibility;
+
+// Is this member a visible, eligible member right now? (Used for the OTHER side of a conversation.)
+async function isEligibleMember(userId) {
+  const r = await db.query(`SELECT 1 FROM profiles p WHERE p.id = $1 AND ${eligibility.candidateSql("p")}`, [userId]);
+  return r.rows.length > 0;
+}
 
 const router = express.Router();
 
@@ -85,11 +93,11 @@ async function listConversations(req, res) {
   }
 }
 
-router.get("/", authenticateToken, listConversations);
-router.get("/conversations", authenticateToken, listConversations);
+router.get("/", authenticateToken, requireEligible, listConversations);
+router.get("/conversations", authenticateToken, requireEligible, listConversations);
 
 // Route: Create a quick match (for direct messaging from explore/likes tabs)
-router.post("/", authenticateToken, async (req, res) => {
+router.post("/", authenticateToken, requireEligible, async (req, res) => {
   const userId = req.user.id;
   const { targetUserId } = req.body;
 
@@ -112,6 +120,9 @@ router.post("/", authenticateToken, async (req, res) => {
     if (existing.rows.length > 0) {
       matchRecord = existing.rows[0];
     } else {
+      if (!(await isEligibleMember(targetUserId))) {
+        return res.status(404).json({ error: "That profile is not available" });
+      }
       const mutual = await hasMutualLike(userId, targetUserId);
       if (!mutual) {
         return res.status(403).json({ error: "You can only start a chat once you've both liked each other" });
@@ -156,7 +167,7 @@ router.post("/", authenticateToken, async (req, res) => {
 //   ?limit=N      page size (default 50, max 100)
 //   ?before=<id>  only messages older than this id (load older history)
 // Without `before` it returns the most recent page.
-router.get("/:matchId/messages", authenticateToken, async (req, res) => {
+router.get("/:matchId/messages", authenticateToken, requireEligible, async (req, res) => {
   const { matchId } = req.params;
   const userId = req.user.id;
 
@@ -193,7 +204,7 @@ router.get("/:matchId/messages", authenticateToken, async (req, res) => {
 // `client_id` (a UUID generated on the device) makes the call idempotent: retrying
 // a send that already reached the server returns the stored message instead of
 // creating a duplicate.
-router.post("/:matchId/messages", authenticateToken, async (req, res) => {
+router.post("/:matchId/messages", authenticateToken, requireEligible, async (req, res) => {
   const { matchId } = req.params;
   const { kind, client_id } = req.body;
   const userId = req.user.id;
@@ -217,6 +228,11 @@ router.post("/:matchId/messages", authenticateToken, async (req, res) => {
     const match = await getMatchForUser(matchId, userId);
     if (!match) {
       return res.status(403).json({ error: "Access denied to this match thread" });
+    }
+    // A member who is suspended, banned, deleted or not eligible any more cannot receive messages either.
+    const otherId = match.user_a === userId ? match.user_b : match.user_a;
+    if (!(await isEligibleMember(otherId))) {
+      return res.status(403).json({ error: "This conversation is not available.", code: "unavailable" });
     }
 
     let mediaId = null;
@@ -259,7 +275,7 @@ router.post("/:matchId/messages", authenticateToken, async (req, res) => {
 
 // Route: Mark messages as read up to (and including) a message id.
 // Read pointers only move forward. The other participant is told so it can show "Seen".
-router.post("/:matchId/read", authenticateToken, async (req, res) => {
+router.post("/:matchId/read", authenticateToken, requireEligible, async (req, res) => {
   const { matchId } = req.params;
   const userId = req.user.id;
   const requested = Number(req.body.last_read_message_id);
@@ -303,7 +319,7 @@ router.post("/:matchId/read", authenticateToken, async (req, res) => {
 });
 
 // Route: Create a quick match (message shortcut)
-router.post("/quick", authenticateToken, async (req, res) => {
+router.post("/quick", authenticateToken, requireEligible, async (req, res) => {
   const { profile_id } = req.body;
   const userId = req.user.id;
 
@@ -327,6 +343,9 @@ router.post("/quick", authenticateToken, async (req, res) => {
     if (existing.rows.length > 0) {
       matchRecord = existing.rows[0];
     } else {
+      if (!(await isEligibleMember(profile_id))) {
+        return res.status(404).json({ error: "That profile is not available" });
+      }
       const mutual = await hasMutualLike(userId, profile_id);
       if (!mutual) {
         return res.status(403).json({ error: "You can only start a chat once you've both liked each other" });

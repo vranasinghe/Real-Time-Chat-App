@@ -41,6 +41,8 @@ export default function RootLayout() {
   const resumeConnection = useAppStore((state) => state.resumeConnection);
   const session = useAppStore((state) => state.session);
   const isInitialized = useAppStore((state) => state.isInitialized);
+  const profileSetupComplete = useAppStore((state) => state.profileSetupComplete);
+  const isDemo = useAppStore((state) => state.isDemo);
   const segments = useSegments();
   const navState = useRootNavigationState();
   const router = useRouter();
@@ -82,7 +84,7 @@ export default function RootLayout() {
       }
     };
     init();
-  }, [fontsLoaded]);
+  }, [fontsLoaded, initializeStore]);
 
   // App returns to the foreground (or the browser tab becomes visible): reconnect + catch up
   useEffect(() => {
@@ -100,6 +102,16 @@ export default function RootLayout() {
     const publicRoots = ["", "index", "onboarding", "auth", "live-demo", "demo", "auth-callback", "+not-found"];
     if (!publicRoots.includes(first)) router.replace("/");
   }, [navState?.key, isInitialized, session, segments, router]);
+
+  // A signed-in member the SERVER does not yet consider eligible (profile not finished, e-mail not
+  // verified, ...) only sees profile setup, e-mail verification and the policy pages. This is a courtesy:
+  // the backend refuses every dating request from such a member anyway.
+  useEffect(() => {
+    if (!navState?.key || !isInitialized || !session || isDemo || profileSetupComplete) return;
+    const first = String(segments[0] ?? "");
+    const allowed = ["", "index", "profile-setup", "auth", "profile", "auth-callback", "+not-found"];
+    if (!allowed.includes(first)) router.replace("/profile-setup");
+  }, [navState?.key, isInitialized, session, isDemo, profileSetupComplete, segments, router]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

@@ -15,6 +15,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const config = require("./config");
 const logger = require("./logger");
+const eligibility = require("./eligibility");
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const JWT_OPTIONS = { algorithms: ["HS256"] };
@@ -63,18 +64,45 @@ function passesCsrf(req) {
 // Looks up the user's current token_version (null = user no longer exists). A token only
 // works while its `tv` equals this value, so bumping it signs the user out everywhere.
 // Replaceable so unit tests can run without a database.
+// One query per request loads everything the eligibility rules need (see eligibility.js); the row is kept
+// on req.account so route middleware never has to ask again.
 let userLookup = async (id) => {
   const db = require("./db");
-  const r = await db.query("SELECT token_version FROM profiles WHERE id = $1", [id]);
+  const r = await db.query(
+    `SELECT token_version, is_demo, status, suspended_until, birthdate::text AS birthdate,
+            email_verified_at, profile_completed_at
+     FROM profiles WHERE id = $1`,
+    [id]
+  );
   return r.rows[0] || null;
 };
 function setUserLookup(fn) {
   userLookup = fn;
 }
 
-async function isSessionCurrent(decoded) {
-  const row = await userLookup(decoded.id);
-  return !!row && (row.token_version ?? 0) === (decoded.tv ?? 0);
+const PROBLEM_MESSAGES = {
+  session_revoked: "Your session has ended. Please sign in again.",
+  account_suspended: "This account is suspended.",
+  account_banned: "This account has been closed for breaking the community rules.",
+  account_closed: "This account is closed.",
+};
+
+// Decides whether a token still stands for a usable account. problem is null when it does.
+//   session_revoked   the account is gone, the token was superseded (password change / sign out
+//                     everywhere), or it belongs to a demo account while the demo login is off
+//   account_*         the account is suspended, banned or deleted: it can neither keep nor start a session
+async function loadSession(decoded) {
+  const account = await userLookup(decoded.id);
+  if (!account) return { account: null, problem: "session_revoked" };
+  // Demo accounts are shared and passwordless. When the demo login is switched off (always, in
+  // production, unless it is an isolated demo service), sessions already issued to them stop working too.
+  if (account.is_demo && !config.demoLoginEnabled) return { account, problem: "session_revoked" };
+  // The account's standing is reported before the token's age, so a suspended or banned member always
+  // learns that, whichever of their old tokens they present.
+  const status = eligibility.statusProblem(account);
+  if (status) return { account, problem: status };
+  if ((account.token_version ?? 0) !== (decoded.tv ?? 0)) return { account, problem: "session_revoked" };
+  return { account, problem: null };
 }
 
 function signAccessToken(user, platform) {
@@ -106,8 +134,7 @@ function clearSessionCookie(res) {
 
 // Creates a session for `user` and answers with { user } (+ { token } for native clients).
 function sendSession(req, res, user, status = 200) {
-  const { token_version, ...publicUser } = user; // never expose internals
-  void token_version;
+  const publicUser = eligibility.withEligibility(user); // never exposes internals; adds the computed eligibility
   const platform = isWebClient(req) ? "web" : "native";
   const token = signAccessToken(user, platform);
   if (platform === "web") {
@@ -144,19 +171,23 @@ const authenticateToken = async (req, res, next) => {
   if (via === "cookie" && !passesCsrf(req)) {
     return res.status(403).json({ error: "Request blocked (CSRF check failed)", code: "csrf" });
   }
+  let loaded;
   try {
-    if (!(await isSessionCurrent(decoded))) {
-      if (via === "cookie") clearSessionCookie(res);
-      return res.status(401).json({ error: "Your session has ended. Please sign in again.", code: "session_revoked" });
-    }
+    loaded = await loadSession(decoded);
   } catch (err) {
     logger.error("session check failed", err);
     return res.status(503).json({ error: "Service temporarily unavailable. Please try again.", code: "unavailable" });
   }
+  if (loaded.problem) {
+    if (via === "cookie") clearSessionCookie(res);
+    return res.status(401).json({ error: PROBLEM_MESSAGES[loaded.problem], code: loaded.problem });
+  }
   req.user = decoded;
+  req.account = loaded.account;
   req.authVia = via;
   next();
 };
+authenticateToken.policy = "session";
 
 // ---- Socket tickets ------------------------------------------------------------
 
@@ -174,22 +205,27 @@ function createSocketTicket(userId, tokenVersion = 0) {
   });
 }
 
-// Accepts a one-time socket ticket (web) or a normal access token (native). Returns the user id.
-async function authenticateSocketCredential({ ticket, token }) {
+// Accepts a one-time socket ticket (web) or a normal access token (native). Returns { userId, account }.
+// A suspended / banned / deleted account is refused here, like on REST.
+async function authenticateSocket({ ticket, token }) {
+  let decoded;
   if (ticket) {
-    const decoded = jwt.verify(ticket, config.jwtSecret, JWT_OPTIONS);
+    decoded = jwt.verify(ticket, config.jwtSecret, JWT_OPTIONS);
     if (decoded.typ !== "socket" || !decoded.jti) throw new jwt.JsonWebTokenError("wrong token type");
     if (usedTickets.has(decoded.jti)) throw new jwt.JsonWebTokenError("ticket already used");
     usedTickets.set(decoded.jti, decoded.exp * 1000);
-    if (!(await isSessionCurrent({ id: decoded.id, tv: decoded.tv }))) throw new jwt.JsonWebTokenError("session ended");
-    return decoded.id;
+  } else if (token) {
+    decoded = verifyAccessToken(token);
+  } else {
+    throw new jwt.JsonWebTokenError("missing credentials");
   }
-  if (token) {
-    const decoded = verifyAccessToken(token);
-    if (!(await isSessionCurrent(decoded))) throw new jwt.JsonWebTokenError("session ended");
-    return decoded.id;
-  }
-  throw new jwt.JsonWebTokenError("missing credentials");
+  const { account, problem } = await loadSession({ id: decoded.id, tv: decoded.tv });
+  if (problem) throw new jwt.JsonWebTokenError(problem === "session_revoked" ? "session ended" : problem);
+  return { userId: decoded.id, account };
+}
+
+async function authenticateSocketCredential(credential) {
+  return (await authenticateSocket(credential)).userId;
 }
 
 module.exports = {
@@ -204,6 +240,8 @@ module.exports = {
   verifyAccessToken,
   authenticateToken,
   createSocketTicket,
+  authenticateSocket,
   authenticateSocketCredential,
+  loadSession,
   setUserLookup,
 };

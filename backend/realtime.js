@@ -21,4 +21,11 @@ function emitToMatch(io, match, event, payload) {
   io.to(userRoom(match.user_a)).to(userRoom(match.user_b)).to(match.id).emit(event, payload);
 }
 
-module.exports = { userRoom, emitToUsers, emitToMatch };
+// Closes every live socket of a member (all devices). Used when an account is suspended, banned or
+// deleted, so a connection opened earlier cannot keep receiving or sending anything.
+function disconnectUser(io, userId) {
+  if (!io || !userId) return;
+  io.in(userRoom(userId)).disconnectSockets(true);
+}
+
+module.exports = { userRoom, emitToUsers, emitToMatch, disconnectUser };

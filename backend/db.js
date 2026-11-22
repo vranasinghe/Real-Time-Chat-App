@@ -119,8 +119,21 @@ const initDb = async () => {
     } else {
       await seedMockProfiles();
       await require("./showcaseProfiles").seedShowcaseProfiles((text, params) => pool.query(text, params));
+      await markFixturesComplete();
     }
   }
+};
+
+// Development fixtures (mock and showcase profiles) stand in for finished, verified members so that
+// discovery, which only lists eligible members, still shows them on a local database. Only ever runs on a
+// local database (see canSeedDevData above); touches nothing but these two columns of fixture rows.
+const markFixturesComplete = async () => {
+  await pool.query(
+    `UPDATE profiles
+     SET email_verified_at = COALESCE(email_verified_at, NOW()),
+         profile_completed_at = COALESCE(profile_completed_at, NOW())
+     WHERE id LIKE 'seed-%'`
+  );
 };
 
 const seedMockProfiles = async () => {

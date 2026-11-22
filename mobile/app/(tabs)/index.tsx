@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { View, Text, Pressable, ScrollView, Image, Alert, StyleSheet, Modal, TextInput, ActivityIndicator, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -8,7 +8,6 @@ import {
   Plus, 
   Trash2, 
   X, 
-  Image as ImageIcon, 
   Video as VideoIcon, 
   Sparkles,
   Camera
@@ -45,7 +44,6 @@ export default function DiscoveryScreen() {
     activeMatch, 
     resetSwipes, 
     fetchDiscoveryProfiles, 
-    createQuickMatch,
     stories,
     addStory,
     deleteStory,
@@ -102,7 +100,7 @@ export default function DiscoveryScreen() {
 
   useEffect(() => {
     fetchDiscoveryProfiles();
-  }, [user?.id]);
+  }, [user?.id, fetchDiscoveryProfiles]);
 
   useEffect(() => {
     if (activeMatch) {
@@ -127,14 +125,22 @@ export default function DiscoveryScreen() {
   };
 
 
+  // The timer below calls the latest handler without restarting every time it is re-created.
+  const handleNextStoryRef = useRef(handleNextStory);
+  useEffect(() => {
+    handleNextStoryRef.current = handleNextStory;
+  });
+  const storyCount = selectedStories.length;
+  const currentStoryType = selectedStories[currentStoryIndex]?.media_type;
+
   useEffect(() => {
     let interval: any;
-    if (viewStoryModalVisible && selectedStories.length > 0 && selectedStories[currentStoryIndex]?.media_type !== "video") {
+    if (viewStoryModalVisible && storyCount > 0 && currentStoryType !== "video") {
       interval = setInterval(() => {
         if (!isTimerPaused) {
           setStoryProgress((prev) => {
             if (prev >= 1) {
-              handleNextStory();
+              handleNextStoryRef.current();
               return 0;
             }
             return prev + 0.02; // ~5 seconds (50 increments * 100ms)
@@ -145,7 +151,7 @@ export default function DiscoveryScreen() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [viewStoryModalVisible, currentStoryIndex, selectedStories.length, isTimerPaused]);
+  }, [viewStoryModalVisible, currentStoryIndex, storyCount, currentStoryType, isTimerPaused]);
 
   const handleMyStoryPress = () => {
     if (myStories.length > 0) {

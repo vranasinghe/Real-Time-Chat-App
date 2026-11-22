@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React from "react";
 import { View, Text, Pressable, Image, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import { MicOff, Volume2, PhoneOff, CameraOff, Video } from "lucide-react-native";
+import { router, Redirect } from "expo-router";
+import { FEATURES } from "@/lib/features";
+import { MicOff, Volume2, PhoneOff, CameraOff } from "lucide-react-native";
 
-export default function VideoCallScreen() {
+function VideoCallScreenImpl() {
   const handleEndCall = () => {
     router.back();
   };
@@ -73,3 +74,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#0E0720",
   },
 });
+
+// Calling is not implemented (no signalling, media or TURN). The route stays unreachable until FEATURES.calls is true.
+export default function VideoCallScreen() {
+  if (!FEATURES.calls) return <Redirect href="/(tabs)/chat" />;
+  return <VideoCallScreenImpl />;
+}

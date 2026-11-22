@@ -1,169 +1,116 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView, Image, Alert, ActivityIndicator } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { View, Text, Pressable, Image, ActivityIndicator } from "react-native";
 import { Camera, Plus, Trash2 } from "lucide-react-native";
-import { useAppStore } from "@/lib/store";
-import { PrimaryButton, GhostButton } from "@/components/PrimaryButton";
+import { OnboardingShell, goToNextStep } from "@/components/onboarding/OnboardingShell";
+import { useOnboarding } from "@/lib/onboardingStore";
+import { relativeImagePath } from "@/lib/onboardingApi";
 import { pickProfileImage } from "@/lib/imagePicker";
+import { resolveMediaUrl, useAppStore } from "@/lib/store";
 
+/**
+ * Real photos only: each one is picked on this device and uploaded to Dateza (never a stock image).
+ * At least one is required; three or more are recommended. Failed uploads say why and can be retried.
+ */
 export default function PhotosSetupScreen() {
-  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
-  const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
-  const uploadPhoto = useAppStore((state) => state.uploadPhoto);
+  const { state, save } = useOnboarding();
+  const uploadPhoto = useAppStore((s) => s.uploadPhoto);
+  const [photos, setPhotos] = useState<string[]>([]); // relative "/api/images/<id>" paths
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const handlePhotoClick = async (index: number) => {
-    if (uploadingSlot !== null) return; // one upload at a time
+  useEffect(() => {
+    if (state) setPhotos(state.profile.photos);
+  }, [state]);
 
-    // If photo exists in this slot, delete it
-    if (uploadedPhotos[index]) {
-      const newPhotos = [...uploadedPhotos];
-      newPhotos.splice(index, 1);
-      setUploadedPhotos(newPhotos);
-      return;
-    }
+  const max = state?.photos.maximum ?? 12;
+  const recommended = state?.photos.recommended ?? 3;
 
-    // Pick photo from device gallery (same validation on web and native)
+  const add = async () => {
+    if (uploading || photos.length >= max) return;
+    setError("");
     let asset;
     try {
       asset = await pickProfileImage();
-    } catch (e: any) {
-      Alert.alert("Can't use that photo", e?.message || "Could not pick an image from the gallery.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not pick that photo.");
       return;
     }
     if (!asset) return;
-
-    // Upload so the photo is saved online, not just on this device
-    setUploadingSlot(uploadedPhotos.length);
+    setUploading(true);
     try {
       const url = await uploadPhoto({ uri: asset.uri, base64: asset.base64 });
-      setUploadedPhotos((current) => [...current, url]);
-    } catch (e: any) {
-      Alert.alert("Upload failed", e?.message || "Could not upload this photo. Please try again.");
+      const path = relativeImagePath(url);
+      if (!path) throw new Error("The server did not accept that photo. Please try another one.");
+      setPhotos((current) => [...current, path]);
+    } catch (e) {
+      setError(e instanceof Error ? `Upload failed: ${e.message}` : "Upload failed. Please try again.");
     } finally {
-      setUploadingSlot(null);
+      setUploading(false);
     }
   };
 
-  const handleNext = () => {
-    if (uploadedPhotos.length < 4) {
-      Alert.alert(
-        "Upload Photos",
-        `Please upload at least 4 photos to verify your profile. Currently uploaded: ${uploadedPhotos.length}/4.`,
-        [
-          { text: "Add More", style: "cancel" },
-          { text: "Skip Anyway", onPress: () => saveAndContinue() }
-        ]
-      );
-      return;
+  const remove = (index: number) => setPhotos((current) => current.filter((_, i) => i !== index));
+
+  const submit = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      goToNextStep(await save("photos", { photos }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save your photos.");
+    } finally {
+      setSaving(false);
     }
-    saveAndContinue();
   };
 
-  const saveAndContinue = () => {
-    const finalPhotos = uploadedPhotos;
-
-    useAppStore.setState((state) => {
-      if (state.user) {
-        return { user: { ...state.user, photos: finalPhotos } };
-      }
-      return {};
-    });
-    router.push("/profile-setup/language");
-  };
+  const slots = Math.max(recommended, photos.length + (photos.length < max ? 1 : 0));
 
   return (
-    <SafeAreaView className="flex-1 bg-bg-base">
-      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }} className="px-6 py-6">
-        <View className="w-full">
-          
-          {/* Header */}
-          <View className="mt-8 mb-8">
-            <Text className="text-white text-3xl font-bold font-display tracking-tight mb-2">
-              Be yourself!
-            </Text>
-            <Text className="text-text-secondary text-base font-sans leading-6">
-              Upload at least 4 photos to show matches the real you. Tap any box to pick or remove a photo.
-            </Text>
-          </View>
-
-          {/* Photo Upload Grid */}
-          <View className="w-full flex-row flex-wrap mb-4">
-            
-            {/* Slot 0 (Large Main Slot) */}
-            <View className="w-full aspect-[4/3] p-1.5 mb-2">
+    <OnboardingShell
+      step="photos"
+      title="Add your photos"
+      subtitle={`Add at least one photo of yourself (${recommended} or more is best). Photos must be of you.`}
+      onNext={submit}
+      canNext={photos.length >= 1 && !uploading}
+      loading={saving}
+      error={error}
+      nextLabel={photos.length >= recommended ? "Continue" : `Continue (${photos.length}/${recommended})`}
+    >
+      <View className="flex-row flex-wrap" style={{ marginHorizontal: -6 }}>
+        {Array.from({ length: slots }).map((_, i) => {
+          const photo = photos[i];
+          const isNext = i === photos.length;
+          return (
+            <View key={i} style={{ width: "33.33%", aspectRatio: 3 / 4, padding: 6 }}>
               <Pressable
-                onPress={() => handlePhotoClick(0)}
-                className="w-full h-full rounded-3xl border border-dashed border-white/10 bg-bg-surface overflow-hidden items-center justify-center relative active:opacity-90"
+                onPress={() => (photo ? remove(i) : isNext ? add() : undefined)}
+                accessibilityRole="button"
+                accessibilityLabel={photo ? `Remove photo ${i + 1}` : `Add photo ${i + 1}`}
+                className="w-full h-full rounded-2xl border border-dashed border-white/10 bg-bg-surface overflow-hidden items-center justify-center active:opacity-90"
               >
-                {uploadingSlot === 0 ? (
-                  <View className="items-center">
-                    <ActivityIndicator color="#7C5CFF" />
-                    <Text className="text-text-secondary font-sans text-[12px] mt-2">Uploading…</Text>
-                  </View>
-                ) : uploadedPhotos[0] ? (
+                {photo ? (
                   <>
-                    <Image source={{ uri: uploadedPhotos[0] }} className="w-full h-full object-cover" />
-                    <View className="absolute bottom-4 right-4 w-10 h-10 rounded-full bg-like/90 items-center justify-center">
-                      <Trash2 size={16} color="#FFFFFF" />
+                    <Image source={{ uri: resolveMediaUrl(photo) }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                    <View className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-like/90 items-center justify-center">
+                      <Trash2 size={12} color="#FFFFFF" />
                     </View>
                   </>
+                ) : isNext && uploading ? (
+                  <ActivityIndicator color="#7C5CFF" />
+                ) : isNext ? (
+                  i === 0 ? <Camera size={26} color="#7C5CFF" strokeWidth={1.5} /> : <Plus size={22} color="#9A8FB8" />
                 ) : (
-                  <View className="items-center px-6">
-                    <Camera size={36} color="#7C5CFF" strokeWidth={1.5} />
-                    <Text className="text-white font-sans font-bold text-base text-center mt-3">
-                      Upload Profile Cover
-                    </Text>
-                    <Text className="text-text-secondary font-sans text-[12px] text-center mt-1">
-                      Click to upload or drag & drop
-                    </Text>
-                  </View>
+                  <Plus size={18} color="#4B4466" />
                 )}
               </Pressable>
             </View>
-
-            {/* Thumbnail Slots 1, 2, 3 */}
-            <View className="w-full flex-row">
-              {[1, 2, 3].map((slotIdx) => (
-                <View key={slotIdx} className="flex-1 aspect-square p-1.5">
-                  <Pressable
-                    onPress={() => handlePhotoClick(slotIdx)}
-                    className="w-full h-full rounded-2xl border border-dashed border-white/10 bg-bg-surface overflow-hidden items-center justify-center relative active:opacity-90"
-                  >
-                    {uploadingSlot === slotIdx ? (
-                      <ActivityIndicator color="#7C5CFF" />
-                    ) : uploadedPhotos[slotIdx] ? (
-                      <>
-                        <Image source={{ uri: uploadedPhotos[slotIdx] }} className="w-full h-full object-cover" />
-                        <View className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-like/90 items-center justify-center">
-                          <Trash2 size={12} color="#FFFFFF" />
-                        </View>
-                      </>
-                    ) : (
-                      <View className="items-center">
-                        <Plus size={20} color="#9A8FB8" />
-                        <Text className="text-text-secondary font-sans text-[11px] mt-1">
-                          Slot {slotIdx + 1}
-                        </Text>
-                      </View>
-                    )}
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-
-          </View>
-        </View>
-
-        {/* Actions */}
-        <View className="w-full space-y-3.5 pb-4 mt-8">
-          <PrimaryButton
-            label={uploadedPhotos.length >= 4 ? "Save & Continue" : `Next (${uploadedPhotos.length}/4)`}
-            onPress={handleNext}
-          />
-        </View>
-
-      </ScrollView>
-    </SafeAreaView>
+          );
+        })}
+      </View>
+      <Text className="text-text-secondary font-sans text-[12px] mt-2">
+        Tap an empty box to add a photo, or a photo to remove it. {photos.length}/{max} added.
+      </Text>
+    </OnboardingShell>
   );
 }

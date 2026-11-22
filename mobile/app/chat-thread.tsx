@@ -24,12 +24,10 @@ import {
   Mic,
   Send,
   Image as ImageIcon,
-  MapPin,
-  User,
-  FileText,
   X,
 } from "lucide-react-native";
 import { useAppStore, Message } from "@/lib/store";
+import { FEATURES } from "@/lib/features";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { Image as MediaImage } from "expo-image";
 import { pickProfileImage, PickedImage } from "@/lib/imagePicker";
@@ -123,31 +121,13 @@ export default function ChatThreadScreen() {
     await sending;
   };
 
+  // Only photo attachments exist. Nothing else may be offered or sent as a placeholder message.
   const handleAttachmentOption = async (type: string) => {
-    if (type === "Gallery" || type === "Camera") {
-      try {
-        const photo = await pickProfileImage(type === "Camera");
-        if (photo) { setPickedPhoto(photo); setShowAttachmentSheet(false); }
-      } catch (error) { Alert.alert("Could not select photo", error instanceof Error ? error.message : "Try another photo."); }
-      return;
-    }
-    setShowAttachmentSheet(false);
-    Alert.alert("Attachment Triggered", `Sharing ${type} in chat...`, [
-      {
-        text: "Send Mock",
-        onPress: async () => {
-          if (!matchId) return;
-          await sendMessage(
-            matchId,
-            type === "Location"
-              ? "📍 Current Location shared"
-              : `📎 Mock ${type} attachment`,
-            type === "Location" ? "location" : "text"
-          );
-        },
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    if (type !== "Gallery" && type !== "Camera") return;
+    try {
+      const photo = await pickProfileImage(type === "Camera");
+      if (photo) { setPickedPhoto(photo); setShowAttachmentSheet(false); }
+    } catch (error) { Alert.alert("Could not select photo", error instanceof Error ? error.message : "Try another photo."); }
   };
 
   const sendPhoto = async () => {
@@ -214,13 +194,6 @@ export default function ChatThreadScreen() {
 
   const attachmentOptions = [
     {
-      label: "Document",
-      icon: FileText,
-      bg: "rgba(59, 130, 246, 0.1)",
-      border: "rgba(59, 130, 246, 0.2)",
-      color: "#3B82F6",
-    },
-    {
       label: "Camera",
       icon: Video,
       bg: "rgba(239, 68, 68, 0.1)",
@@ -233,20 +206,6 @@ export default function ChatThreadScreen() {
       bg: "rgba(16, 185, 129, 0.1)",
       border: "rgba(16, 185, 129, 0.2)",
       color: "#10B981",
-    },
-    {
-      label: "Audio",
-      icon: Mic,
-      bg: "rgba(245, 158, 11, 0.1)",
-      border: "rgba(245, 158, 11, 0.2)",
-      color: "#F59E0B",
-    },
-    {
-      label: "Contact",
-      icon: User,
-      bg: "rgba(236, 72, 153, 0.1)",
-      border: "rgba(236, 72, 153, 0.2)",
-      color: "#EC4899",
     },
   ];
 
@@ -293,7 +252,7 @@ export default function ChatThreadScreen() {
             </View>
           </View>
 
-          <View style={styles.headerActions}>
+          {FEATURES.calls && <View style={styles.headerActions}>
             <Pressable
               onPress={() => router.push("/call/audio")}
               style={({ pressed }) => [
@@ -312,7 +271,7 @@ export default function ChatThreadScreen() {
             >
               <Video size={18} color="#FFFFFF" />
             </Pressable>
-          </View>
+          </View>}
         </View>
 
         {/* Messages: inverted so the newest sits at the bottom and older pages load on scroll up */}
@@ -380,13 +339,11 @@ export default function ChatThreadScreen() {
               maxLength={MAX_MESSAGE_LENGTH}
               multiline
             />
-            <Pressable
-              onPress={() =>
-                Alert.alert("Voice Recording", "Voice messages coming soon!")
-              }
-            >
-              <Mic size={18} color="#9A8FB8" />
-            </Pressable>
+            {FEATURES.voiceMessages && (
+              <Pressable accessibilityRole="button" accessibilityLabel="Record a voice message">
+                <Mic size={18} color="#9A8FB8" />
+              </Pressable>
+            )}
           </View>
 
           <Pressable
@@ -723,7 +680,7 @@ const styles = StyleSheet.create({
   attachmentGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-between",
+    justifyContent: "space-evenly",
   },
   attachmentItem: { width: "30%", alignItems: "center", marginBottom: 24 },
   attachmentIcon: {
