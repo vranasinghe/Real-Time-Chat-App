@@ -9,6 +9,17 @@
     "dev:backend": "npm --prefix backend run dev",
     "dev:mobile": "npm --prefix mobile start",
     "start:backend": "npm --prefix backend start",
-    "start:mobile": "npm --prefix mobile start"
+    "start:mobile": "npm --prefix mobile start",
+    "test:backend": "npm --prefix backend test",
+    "test:integration": "npm --prefix backend run test:integration:local",
+    "typecheck:mobile": "npm --prefix mobile run typecheck",
+    "lint:mobile": "npm --prefix mobile run lint",
+    "build:web": "npm --prefix mobile run export:web",
+    "audit:report": "node scripts/audit-report.js",
+    "test:all": "node scripts/test-all.js",
+    "test:e2e": "npm --prefix backend run test:e2e:local"
+  },
+  "engines": {
+    "node": ">=22 <23"
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView, Image, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { User, Edit, Bell, Globe, LogOut, Key, ArrowRight, HelpCircle, FileText } from "lucide-react-native";
@@ -7,7 +7,7 @@ import { useAppStore } from "@/lib/store";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 
 export default function MyProfileScreen() {
-  const { user, signOut } = useAppStore();
+  const { user, signOut, isDemo } = useAppStore();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleLogout = async () => {
@@ -16,11 +16,17 @@ export default function MyProfileScreen() {
     router.replace("/auth/sign-in");
   };
 
-  const renderMenuItem = (IconComponent: any, label: string, onPress: () => void) => {
+  // A menu row. With no `onPress` the row is shown as unavailable (dimmed, not pressable, labelled "Not available yet").
+  const renderMenuItem = (IconComponent: any, label: string, onPress?: () => void) => {
+    const unavailable = !onPress;
     return (
       <Pressable
         onPress={onPress}
-        className="flex-row justify-between items-center bg-bg-surface/30 border border-white/5 px-4 py-4 rounded-2xl mb-3 active:bg-bg-surface/60"
+        disabled={unavailable}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: unavailable }}
+        accessibilityLabel={unavailable ? `${label}, not available yet` : label}
+        className={`flex-row justify-between items-center bg-bg-surface/30 border border-white/5 px-4 py-4 rounded-2xl mb-3 ${unavailable ? "opacity-50" : "active:bg-bg-surface/60"}`}
       >
         <View className="flex-row items-center">
           <View className="w-10 h-10 bg-primary/10 rounded-xl items-center justify-center mr-3.5">
@@ -30,7 +36,11 @@ export default function MyProfileScreen() {
             {label}
           </Text>
         </View>
-        <ArrowRight size={18} color="#9A8FB8" />
+        {unavailable ? (
+          <Text className="text-text-secondary font-sans text-[12px]">Not available yet</Text>
+        ) : (
+          <ArrowRight size={18} color="#9A8FB8" />
+        )}
       </Pressable>
     );
   };
@@ -64,11 +74,18 @@ export default function MyProfileScreen() {
           </View>
 
           <Text className="text-white text-2xl font-bold font-display tracking-tight">
-            {user?.name || "Test User"}
+            {user?.name || ""}
           </Text>
-          <Text className="text-text-secondary text-sm font-sans mt-0.5">
-            {user?.gender ? `Verified Account • ${user.gender}` : "Verified Account"}
-          </Text>
+          {/* No verification badge: nothing verifies members yet. Show only the account email. */}
+          {user?.email ? (
+            <Text className="text-text-secondary text-sm font-sans mt-0.5">{user.email}</Text>
+          ) : null}
+          {/* Truthful status: this is e-mail verification only. Nothing here says the person has been identity-checked. */}
+          {user && !isDemo ? (
+            <Text className={`text-[12px] font-sans mt-1 ${user.email_verified ? "text-text-secondary" : "text-like"}`}>
+              {user.email_verified ? "Email verified" : "Email not verified"}
+            </Text>
+          ) : null}
         </View>
 
         {/* Settings Menu Sections */}
@@ -79,8 +96,8 @@ export default function MyProfileScreen() {
 
           {renderMenuItem(User, "Edit Profile", () => router.push("/profile/edit-profile"))}
           {renderMenuItem(Key, "Change Password", () => router.push("/profile/change-password"))}
-          {renderMenuItem(Bell, "Notifications", () => Alert.alert("Notifications", "Notification settings triggered."))}
-          {renderMenuItem(Globe, "Language", () => Alert.alert("Languages", "Language settings triggered."))}
+          {renderMenuItem(Bell, "Notification settings")}
+          {renderMenuItem(Globe, "Language")}
           {renderMenuItem(HelpCircle, "Help Center", () => router.push("/profile/help-center"))}
           {renderMenuItem(FileText, "Privacy Policy", () => router.push("/profile/privacy-policy"))}
 

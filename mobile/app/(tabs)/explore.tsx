@@ -16,7 +16,9 @@ export default function ExploreScreen() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
 
-  const filters = ["All", "Nearby", "New", "Recently Active"];
+  // "Nearby" is hidden until real, consented distance filtering exists: it used to test whether the
+  // profile had coordinates at all, which says nothing about how close anyone is.
+  const filters = ["All", "New", "Recently Active"];
 
   // Filter profiles based on search query and selected filter
   const filteredProfiles = profiles.filter((p) => {
@@ -28,7 +30,6 @@ export default function ExploreScreen() {
 
     if (!matchesSearch) return false;
 
-    if (activeFilter === "Nearby") return p.lat != null;
     if (activeFilter === "New") return true;
     if (activeFilter === "Recently Active") return p.is_online;
     return true;

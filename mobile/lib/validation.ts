@@ -1,6 +1,8 @@
 // Shared form validation, used by every screen that checks emails, passwords or ages.
 // (The backend re-validates everything; these checks are for fast, friendly feedback.)
 
+import { validateBirthdate } from "./age";
+
 export const MIN_AGE_YEARS = 18;
 export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_LENGTH = 72; // bcrypt ignores anything longer
@@ -33,11 +35,10 @@ export function passwordChecks(password = ""): PasswordCheck[] {
 export const isStrongPassword = (password: string): boolean =>
   passwordChecks(password).every((c) => c.satisfied);
 
-/** True when the ISO date (YYYY-MM-DD) is a real date at least MIN_AGE_YEARS ago. */
+/**
+ * True when the ISO date (YYYY-MM-DD) is a real calendar date of someone who is at least MIN_AGE_YEARS old.
+ * Same rules as the server (see lib/age.js): impossible dates, loose formats and future dates are rejected.
+ */
 export function isAdult(birthdate: string, today = new Date()): boolean {
-  const dob = new Date(birthdate);
-  if (isNaN(dob.getTime())) return false;
-  const cutoff = new Date(today);
-  cutoff.setFullYear(cutoff.getFullYear() - MIN_AGE_YEARS);
-  return dob <= cutoff;
+  return validateBirthdate(birthdate, { now: today, minAge: MIN_AGE_YEARS }).ok;
 }

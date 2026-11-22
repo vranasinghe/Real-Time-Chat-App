@@ -16,7 +16,7 @@ Known limits: sessions are stateless JWTs (no server-side revocation until they 
 
 ## Environment variables
 
-Backend (Render): `DATABASE_URL` (secret), `JWT_SECRET` (32+ chars), `NODE_ENV=production`, `CORS_ORIGIN` (web origin(s), comma separated), `DEMO_LOGIN_ENABLED`, optional `WEB_SESSION_DAYS`, `NATIVE_SESSION_DAYS`, `LOG_LEVEL`. Dev-only: `ALLOW_MOCK_GOOGLE_LOGIN=true`.
+Backend (Render): `DATABASE_URL` (secret), `JWT_SECRET` (32+ chars), `NODE_ENV=production`, `CORS_ORIGIN` (web origin(s), comma separated), `DEMO_LOGIN_ENABLED=false` (the shared demo login is never allowed on the production service; `DEMO_LOGIN_ENABLED=true` is only honoured in production together with `DEMO_ENVIRONMENT=isolated` on a separate demo service with its own database), optional `WEB_SESSION_DAYS`, `NATIVE_SESSION_DAYS`, `LOG_LEVEL`. Dev-only: `ALLOW_MOCK_GOOGLE_LOGIN=true`.
 Client (build time, public): `EXPO_PUBLIC_BACKEND_URL` (required in production), optional `EXPO_PUBLIC_WEB_API_BASE`. See `mobile/.env.example`.
 
 ## Deploy order (matters)

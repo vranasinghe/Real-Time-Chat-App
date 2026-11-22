@@ -29,8 +29,39 @@ if (corsOrigins.length === 0 && isProduction) {
   warnings.push("CORS_ORIGIN is not set: browsers from any origin can call this API. Set it to your web app URL(s).");
 }
 
+// Shared demo logins (Alex / Elena) let anyone sign in without a password. They must never exist on the
+// consumer production service, so in production the flag alone is NOT enough: the operator must also
+// set DEMO_ENVIRONMENT=isolated, which asserts "this is a separate demo service with its own database".
+// Otherwise the request is ignored (and logged as a warning at startup). Outside production the flag
+// works as before. Pure function so it can be tested without loading the whole configuration.
+function resolveDemoLogin(e, production) {
+  const requested = e.DEMO_LOGIN_ENABLED === "true";
+  if (!requested) return { enabled: false, requested, blocked: false };
+  if (!production) return { enabled: true, requested, blocked: false };
+  if (e.DEMO_ENVIRONMENT === "isolated") return { enabled: true, requested, blocked: false };
+  return { enabled: false, requested, blocked: true };
+}
+const demoLogin = resolveDemoLogin(env, isProduction);
+if (demoLogin.blocked) {
+  warnings.push(
+    "DEMO_LOGIN_ENABLED=true is IGNORED in production: shared demo logins are only allowed on a separate demo service with its own database (also set DEMO_ENVIRONMENT=isolated there)."
+  );
+}
+
+// E-mail verification is mandatory for dating features. Outside production a developer may set
+// REQUIRE_EMAIL_VERIFICATION=false (codes are only logged there anyway). In production the switch is ignored,
+// and the service refuses to start without a mail provider, because nobody could ever become eligible.
+const requireEmailVerification = isProduction ? true : env.REQUIRE_EMAIL_VERIFICATION !== "false";
+if (isProduction && env.REQUIRE_EMAIL_VERIFICATION === "false") {
+  warnings.push("REQUIRE_EMAIL_VERIFICATION=false is IGNORED in production: e-mail verification is mandatory.");
+}
+if (isProduction && !(env.RESEND_API_KEY && env.MAIL_FROM)) {
+  errors.push("RESEND_API_KEY and MAIL_FROM are required in production: e-mail verification is mandatory, so without a mail provider no member could become eligible");
+}
+
 const config = {
   isProduction,
+  requireEmailVerification,
   port: parseInt(env.PORT, 10) || 3000,
   databaseUrl: env.DATABASE_URL,
   jwtSecret,
@@ -48,7 +79,7 @@ const config = {
   webSessionDays: parseInt(env.WEB_SESSION_DAYS, 10) || 7,
   nativeSessionDays: parseInt(env.NATIVE_SESSION_DAYS, 10) || 30,
   socketTicketSeconds: 30,
-  demoLoginEnabled: env.DEMO_LOGIN_ENABLED === "true",
+  demoLoginEnabled: demoLogin.enabled,
   logLevel: env.LOG_LEVEL || "info",
 };
 
@@ -58,5 +89,7 @@ config.validate = () => {
     throw new Error("Invalid configuration:\n - " + errors.join("\n - "));
   }
 };
+
+config.resolveDemoLogin = resolveDemoLogin;
 
 module.exports = config;

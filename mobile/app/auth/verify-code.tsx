@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, Alert, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView } from "react-native";
 import { KeyboardAvoid } from "@/components/common/KeyboardAvoid";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { OtpInput } from "@/components/OtpInput";
 import { ApiError } from "@/lib/api";
 import { confirmEmailCode, requestEmailCode } from "@/lib/accountApi";
+import { useAppStore } from "@/lib/store";
 
 const RESEND_SECONDS = 60;
 
@@ -45,7 +46,6 @@ export default function VerifyCodeScreen() {
 
   useEffect(() => {
     void sendCode(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleConfirm = async () => {
@@ -57,7 +57,8 @@ export default function VerifyCodeScreen() {
     setLoading(true);
     try {
       await confirmEmailCode(code);
-      router.replace("/profile-setup/birthday");
+      await useAppStore.getState().refreshProfile(); // the server now says the address is verified
+      router.replace("/profile-setup");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not verify the code.");
     } finally {
@@ -100,7 +101,7 @@ export default function VerifyCodeScreen() {
               Verify Code
             </Text>
             <Text className="text-text-secondary text-base font-sans leading-6">
-              Enter the 6-digit code we emailed you to confirm your address.
+              Enter the 6-digit code we emailed you. Dateza needs a verified email address before you can meet people.
             </Text>
           </View>
 
@@ -144,8 +145,16 @@ export default function VerifyCodeScreen() {
             onPress={handleConfirm}
             loading={loading}
           />
-          <Pressable onPress={() => router.replace("/profile-setup/birthday")} className="py-4 items-center" accessibilityRole="button">
-            <Text className="text-text-secondary font-sans text-[14px] underline">Verify later</Text>
+          {/* Verification is required to use Dateza: there is no "verify later". */}
+          <Pressable
+            onPress={async () => {
+              await useAppStore.getState().signOut();
+              router.replace("/auth/sign-in");
+            }}
+            className="py-4 items-center"
+            accessibilityRole="button"
+          >
+            <Text className="text-text-secondary font-sans text-[14px] underline">Use a different account</Text>
           </Pressable>
         </View>
 

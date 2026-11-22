@@ -3,8 +3,9 @@
 // Usage (backend must be running):
 //   API_URL=http://localhost:5001 npm run test:images
 //
-// Creates a throwaway account (images-e2e-*@example.com); run it against a local
-// or staging database, not production.
+// Creates a throwaway member (images-e2e-*@example.com); run it against a local disposable database, never
+// production. The member goes through the real sign-up API; the server must run with
+// REQUIRE_EMAIL_VERIFICATION=false for the profile step (see test/e2eHelpers.js). `npm run test:e2e:local` does it all.
 
 // Safety: these scripts create accounts and delete nothing, and API_URL may be a server
 // connected to ANY database. Only run them against a disposable one, and say so:
@@ -17,6 +18,7 @@ if (process.env.E2E_CONFIRM_DISPOSABLE_DB !== "1") {
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
+const { registerMember, onboardMember } = require("./e2eHelpers");
 
 const API = process.env.API_URL || "http://localhost:5001";
 const RUN = Date.now().toString(36);
@@ -48,13 +50,12 @@ async function api(method, path, token, body) {
 
 (async () => {
   console.log(`Images e2e against ${API}`);
-  const reg = await api("POST", "/api/auth/register", null, {
+  const member = await registerMember(api, {
     email: `images-e2e-${RUN}@example.com`,
-    password: "ImgTest#" + crypto.randomBytes(4).toString("hex"),
+    password: "Img1Test#" + crypto.randomBytes(4).toString("hex"),
     name: "Images E2E",
   });
-  assert.equal(reg.status, 201);
-  const token = reg.data.token;
+  const token = member.token;
 
   let uploaded;
   await check("upload a PNG (base64) and get a database image path back", async () => {
@@ -95,21 +96,32 @@ async function api(method, path, token, body) {
     assert.equal((await fetch(`${API}/api/images/not-a-uuid`)).status, 404);
   });
 
-  await check("profile photos are cleaned up on save", async () => {
+  await check("profile photos are cleaned up on save and must be the member's own uploads", async () => {
+    // Remote URLs are no longer accepted as profile photos (they could point anywhere); the whole request is refused.
+    const remote = await api("POST", "/api/auth/complete-setup", token, {
+      photos: [`${API}${uploaded.url}`, "https://example.com/photo.jpg"],
+    });
+    assert.equal(remote.status, 400, JSON.stringify(remote.data));
+    assert.equal(remote.data.code, "photo_not_owned");
+
     const res = await api("POST", "/api/auth/complete-setup", token, {
-      birthdate: "1998-01-01",
       gender: "other",
       looking_for: "everyone",
       bio: "images test",
       photos: [
-        `${API}${uploaded.url}`, // full URL to our image -> stored as relative path
+        `${API}${uploaded.url}`, // full URL to our own image -> stored as relative path
         "blob:http://localhost:8082/1234", // device-only -> dropped
         "file:///data/user/0/photo.jpg", // device-only -> dropped
-        "https://example.com/photo.jpg", // web URL -> kept
       ],
     });
     assert.equal(res.status, 200, JSON.stringify(res.data));
-    assert.deepEqual(res.data.user.photos, [uploaded.url, "https://example.com/photo.jpg"]);
+    assert.deepEqual(res.data.user.photos, [uploaded.url]);
+  });
+
+  await check("a member can finish onboarding with an uploaded photo (the profile then counts as complete)", async () => {
+    await onboardMember(api, member);
+    const me = await api("GET", "/api/auth/me", token);
+    assert.equal(me.data.eligibility.eligible, true);
   });
 
   console.log(`\n${passed} checks passed`);

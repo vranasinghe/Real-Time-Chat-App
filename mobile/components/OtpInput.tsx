@@ -8,7 +8,7 @@ interface OtpInputProps {
 
 export function OtpInput({ codeLength = 4, onCodeChanged }: OtpInputProps) {
   const [code, setCode] = useState<string[]>(Array(codeLength).fill(""));
-  const inputs = useRef<Array<TextInput | null>>([]);
+  const inputs = useRef<(TextInput | null)[]>([]);
 
   const handleChangeText = (text: string, index: number) => {
     const cleanText = text.replace(/[^0-9]/g, "");

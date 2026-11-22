@@ -3,8 +3,9 @@
 // Usage (backend must be running):
 //   API_URL=http://localhost:5001 npm run test:chat
 //
-// Creates three throwaway accounts (chat-e2e-*@example.com) and deletes nothing,
-// so run it against a local or staging database, not production.
+// Creates three throwaway members (chat-e2e-*@example.com) and deletes nothing, so run it against a local
+// disposable database, never production. Members go through the real sign-up and onboarding API, so the server
+// must run with REQUIRE_EMAIL_VERIFICATION=false (see test/e2eHelpers.js). `npm run test:e2e:local` does all of it.
 
 // Safety: these scripts create accounts and delete nothing, and API_URL may be a server
 // connected to ANY database. Only run them against a disposable one, and say so:
@@ -18,6 +19,7 @@ if (process.env.E2E_CONFIRM_DISPOSABLE_DB !== "1") {
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const { io } = require("socket.io-client");
+const { createEligibleMember } = require("./e2eHelpers");
 
 const API = process.env.API_URL || "http://localhost:5001";
 const PASSWORD = "E2eTest#" + crypto.randomBytes(4).toString("hex");
@@ -43,15 +45,9 @@ async function api(method, path, token, body) {
   return { status: res.status, data: text ? JSON.parse(text) : null };
 }
 
+// A finished member: adult, policies accepted, onboarded through the API (eligible for dating features).
 async function register(label) {
-  const email = `chat-e2e-${label}-${RUN}@example.com`;
-  const { status, data } = await api("POST", "/api/auth/register", null, {
-    email,
-    password: PASSWORD,
-    name: `E2E ${label}`,
-  });
-  assert.equal(status, 201, `register ${label}: ${JSON.stringify(data)}`);
-  return { token: data.token, id: data.user.id };
+  return createEligibleMember(api, { email: `chat-e2e-${label}-${RUN}@example.com`, password: PASSWORD, name: `E2E ${label}` });
 }
 
 function connect(user) {

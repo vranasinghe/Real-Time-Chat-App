@@ -4,9 +4,10 @@ import {
   View,
   Text,
   Pressable,
-  Image,
   StyleSheet,
   StatusBar,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { router } from "expo-router";
 import Animated, {
@@ -20,7 +21,6 @@ import { ArrowLeft, Image as ImageIcon, Heart } from "lucide-react-native";
 import { useAppStore } from "@/lib/store";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, ClipPath, Path, Image as SvgImage } from "react-native-svg";
-import { Platform, ScrollView } from "react-native";
 
 
 const SW = getAppWidth();
@@ -87,7 +87,7 @@ export default function MatchedScreen() {
       })
     );
     card2Rotate.value = withDelay(300, withSpring(12, { damping: 10 }));
-  }, []);
+  }, [card1Scale, card1Rotate, card2Scale, card2Rotate, heartScale]);
 
   const card1Style = useAnimatedStyle(() => ({
     transform: [

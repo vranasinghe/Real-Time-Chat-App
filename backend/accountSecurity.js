@@ -14,6 +14,7 @@ const logger = require("./logger");
 const mailer = require("./mailer");
 const session = require("./session");
 const { hashPassword, passwordProblem } = require("./passwords");
+const { POLICY_VERSIONS } = require("./policies");
 
 const router = express.Router();
 
@@ -94,7 +95,12 @@ const requireMail = (req, res, next) =>
 // What the app should offer. The app skips verification and hides password reset when off.
 router.get("/config", (req, res) => {
   const enabled = mailer.isEnabled();
-  res.status(200).json({ emailVerification: enabled, passwordReset: enabled });
+  res.status(200).json({
+    emailVerification: enabled,
+    emailVerificationRequired: config.requireEmailVerification,
+    passwordReset: enabled,
+    policies: POLICY_VERSIONS, // the versions a new member must accept (see policies.js)
+  });
 });
 
 // ---- Email verification ----------------------------------------------------------

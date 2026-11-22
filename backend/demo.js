@@ -4,7 +4,8 @@
 // two devices can start chatting in real time without signing up: device 1 picks
 // Alex, device 2 picks Elena.
 //
-// Off unless DEMO_LOGIN_ENABLED=true. Demo accounts:
+// Off unless DEMO_LOGIN_ENABLED=true, and in production also DEMO_ENVIRONMENT=isolated (separate demo
+// service + database; see config.js). Demo accounts:
 //   - have an unusable random password (only this endpoint can log into them)
 //   - are flagged is_demo and never shown to real users in discovery
 //   - have their chat history trimmed to the last DEMO_RETENTION_HOURS (default 24)
@@ -88,10 +89,14 @@ async function ensureDemoAccounts() {
   for (const p of Object.values(PERSONAS)) {
     const unusablePassword = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
     await db.query(
-      `INSERT INTO profiles (id, email, password, name, birthdate, gender, looking_for, bio, height_cm, interests, photos, is_online, is_demo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, true)
+      `INSERT INTO profiles (id, email, password, name, birthdate, gender, looking_for, bio, height_cm, interests, photos, is_online, is_demo,
+                              status, email_verified_at, profile_completed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, true, 'active', NOW(), NOW())
        ON CONFLICT (id) DO UPDATE SET
-         is_demo = true, name = EXCLUDED.name, birthdate = EXCLUDED.birthdate, gender = EXCLUDED.gender,
+         is_demo = true, status = 'active',
+         email_verified_at = COALESCE(profiles.email_verified_at, NOW()),
+         profile_completed_at = COALESCE(profiles.profile_completed_at, NOW()),
+         name = EXCLUDED.name, birthdate = EXCLUDED.birthdate, gender = EXCLUDED.gender,
          looking_for = EXCLUDED.looking_for, bio = EXCLUDED.bio, height_cm = EXCLUDED.height_cm,
          interests = EXCLUDED.interests, photos = EXCLUDED.photos`,
       [p.id, p.email, unusablePassword, p.name, p.birthdate, p.gender, p.looking_for, p.bio, p.height_cm, p.interests, [await demoPhotoUrl(p)]]

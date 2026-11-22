@@ -36,10 +36,14 @@ projects:
               - key: CORS_ORIGIN
                 # Web app origin(s), comma separated. Not a secret.
                 value: https://real-time-chat-app-tau-six.vercel.app
+              # The shared one-tap demo login must NOT run on the consumer production service. It is
+              # off by default and the backend ignores DEMO_LOGIN_ENABLED=true in production unless
+              # DEMO_ENVIRONMENT=isolated is also set (see backend/config.js). If a public demo is wanted,
+              # create a SEPARATE service with its OWN database and set both variables there.
               - key: DEMO_LOGIN_ENABLED
-                value: "true"
-              # Optional: email for verification codes / password reset (see backend/.env.example).
-              # Without them those features are switched off in production.
+                value: "false"
+              # REQUIRED in production: e-mail verification is mandatory for dating features, so the backend
+              # refuses to start without a mail provider (see backend/.env.example).
               - key: RESEND_API_KEY
                 sync: false
               - key: MAIL_FROM

@@ -1,3 +1,14 @@
+-- ======================================================================================
+-- LEGACY / NOT USED. DO NOT DEPLOY.
+--
+-- This is the original Supabase-style schema (it references auth.users, which Dateza does not
+-- use). It was moved here from mobile/db/schema.sql on 2026-11-22 so nobody applies it by mistake.
+-- It is kept only as history, unmodified below this banner.
+--
+-- The authoritative database schema is backend/db_init.sql plus backend/migrations/*.sql,
+-- applied by backend/db.js at startup. See docs/implementation/DATABASE_MIGRATIONS.md.
+-- ======================================================================================
+
 -- Public profiles table
 create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
