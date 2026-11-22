@@ -102,6 +102,74 @@
     "match_percent": 82
   },
   {
+    "key": "ivy",
+    "name": "Ivy Morgan",
+    "birthdate": "2000-09-22",
+    "gender": "female",
+    "looking_for": "everyone",
+    "height_cm": 169,
+    "bio": "Marketing creative with a soft spot for live music, coastal weekends, and trying every pastry in a new neighborhood. I appreciate easy conversation, kindness, and someone who can make me laugh.",
+    "interests": [
+      "Live Music",
+      "Travel",
+      "Baking",
+      "Beach Walks"
+    ],
+    "is_online": true,
+    "match_percent": 91
+  },
+  {
+    "key": "claire",
+    "name": "Claire Dawson",
+    "birthdate": "1996-04-19",
+    "gender": "female",
+    "looking_for": "everyone",
+    "height_cm": 171,
+    "bio": "Copywriter, Sunday-market regular, and always in search of a great bookstore. I am happiest over good coffee and a long walk, and I am looking for something genuine and grounded.",
+    "interests": [
+      "Books",
+      "Coffee",
+      "Markets",
+      "Writing"
+    ],
+    "is_online": true,
+    "match_percent": 89
+  },
+  {
+    "key": "sadie",
+    "name": "Sadie Collins",
+    "birthdate": "2002-10-01",
+    "gender": "female",
+    "looking_for": "everyone",
+    "height_cm": 166,
+    "bio": "Garden designer who can spend an entire afternoon outdoors and still make it to dinner on time. I am into weekend road trips, creative projects, and meeting someone who is thoughtful and fun.",
+    "interests": [
+      "Gardens",
+      "Road Trips",
+      "Art",
+      "Cooking"
+    ],
+    "is_online": false,
+    "match_percent": 87
+  },
+  {
+    "key": "brooke",
+    "name": "Brooke Hart",
+    "birthdate": "1993-01-30",
+    "gender": "female",
+    "looking_for": "everyone",
+    "height_cm": 173,
+    "bio": "Event planner who loves a great restaurant, a slow Sunday morning, and finding the perfect spot for a sunset. I value warmth, curiosity, and a relationship that feels like a team.",
+    "interests": [
+      "Food",
+      "Design",
+      "Travel",
+      "Cinema"
+    ],
+    "is_online": true,
+    "match_percent": 85
+  },
+  {
     "key": "adrian",
     "name": "Adrian Cole",
     "birthdate": "1998-04-12",
