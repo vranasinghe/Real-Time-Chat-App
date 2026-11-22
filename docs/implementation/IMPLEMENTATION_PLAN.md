@@ -37,7 +37,7 @@ Defect ids (`D-xx`) refer to `BASELINE_AUDIT.md` §6. Task ids (`P<phase>-<nn>`)
 ## 1. Ground rules for execution
 
 1. **Preserve what works.** The chat core (idempotent sends, paging, read receipts, reconnect catch-up), the session model (HttpOnly cookie + CSRF + `token_version`, SecureStore on native), config validation, health checks, graceful shutdown and the existing 46 tests are assets. Every phase must keep `npm test`, `npm run test:integration`, `tsc` and `lint` green.
-2. **Expand / contract migrations.** Every schema change is a new numbered file in `backend/migrations/` (next free number is **006**; 004/005 are uncommitted and destructive — review first, §4 P0-02). Additive first (new nullable columns, `NOT VALID` constraints, `CREATE INDEX IF NOT EXISTS`), backfill in a separate step, tighten later. Never edit an applied migration. Each migration ships with a recovery note in `DATABASE_MIGRATIONS.md` (what to restore / what the inverse statement is). No `DROP`/`TRUNCATE`/destructive `DELETE` against shared databases without explicit owner approval.
+2. **Expand / contract migrations.** Every schema change is a new numbered file in `backend/migrations/` (next free number is **008** after Phase 1: 004/005 are retired and archived in `backend/ops/local-dev-cleanup/`, 006/007 are committed). Additive first (new nullable columns, `NOT VALID` constraints, `CREATE INDEX IF NOT EXISTS`), backfill in a separate step, tighten later. Never edit an applied migration. Each migration ships with a recovery note in `DATABASE_MIGRATIONS.md` (what to restore / what the inverse statement is). No `DROP`/`TRUNCATE`/destructive `DELETE` against shared databases without explicit owner approval.
 3. **Local and throwaway databases only.** Integration tests run only against `scripts/test-db.js` (local PostgreSQL 18 is installed) or the CI service container. Production (Render/Neon/Vercel/EAS/stores) is never touched without the owner's explicit instruction.
 4. **Server decides.** Eligibility, blocks, status, privacy and moderation are enforced in the backend (REST and Socket.IO). Client guards are only UX.
 5. **No fake features.** Anything that looks functional must be functional or be removed/disabled with honest copy.
@@ -78,8 +78,8 @@ Hard dependencies:
 |---|---|
 | Destructive-migration guard on shared/production databases (`dbSafety.js`, tested) | **DONE (Phase 0)** |
 | Fake-account seeding refused on non-local databases (`canSeedDevData`, tested) | **DONE (Phase 0)** |
-| Other members' coordinates removed from discovery and likes-you payloads (P1-00) | **DONE (Release Gate A, uncommitted)** — tested |
-| `DEMO_LOGIN_ENABLED` off in the production blueprint, and ignored by the backend in production unless `DEMO_ENVIRONMENT=isolated`; demo, if wanted, runs as a separate service with its own database (P1-00b) | **DONE in code/config (uncommitted, not deployed)** — takes effect when the owner deploys |
+| Other members' coordinates removed from discovery and likes-you payloads (P1-00) | **DONE (Release Gate A; committed locally in `378eac8`)** — tested locally |
+| `DEMO_LOGIN_ENABLED` off in the production blueprint, and ignored by the backend in production unless `DEMO_ENVIRONMENT=isolated`; demo, if wanted, runs as a separate service with its own database (P1-00b) | **DONE in code/config (committed locally in `378eac8`, not pushed, not deployed)** — takes effect when the owner deploys |
 | Owner-run production cleanup runbook reviewed and executed by the owner (`PRODUCTION_CLEANUP_RUNBOOK.md`, prepared in Phase 0, **not executed**) | PREPARED — execution is the owner's action |
 | Migrations 004/005 not applied to any shared database until the owner approves them (the guard enforces this) | ENFORCED |
 
@@ -385,7 +385,7 @@ Every phase report records exact commands and counts (`pass/fail/skipped`) in `T
 
 ## 6. Database migration roadmap (authoritative order)
 
-Existing: `001_indexes_and_constraints`, `002_account_security`, `003_ephemeral_media`, `004_remove_requested_mock_profiles` and `005_remove_additional_mock_profiles` (both **destructive data cleanups, uncommitted, not owner-approved**; the runner applies them only to a local database and refuses them on any shared one — see `DATABASE_MIGRATIONS.md`). **Numbers are reserved by this table and never reused**, even if a phase slips; if a number is skipped, record why.
+Existing: `001_indexes_and_constraints`, `002_account_security`, `003_ephemeral_media`, `004_remove_requested_mock_profiles` and `005_remove_additional_mock_profiles` (both destructive data cleanups, now **retired and archived** in `backend/ops/local-dev-cleanup/`; the runner never executes them and numbers 4 and 5 stay reserved; `006` and `007` were added in Phase 1 — see `DATABASE_MIGRATIONS.md`). **Numbers are reserved by this table and never reused**, even if a phase slips; if a number is skipped, record why.
 
 | # | Name | Phase | New / changed objects | Rollback / recovery note |
 |---|---|---|---|---|

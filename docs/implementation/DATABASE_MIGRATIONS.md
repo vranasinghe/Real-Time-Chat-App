@@ -29,8 +29,8 @@ DATE columns (`birthdate`) are returned by the driver as `YYYY-MM-DD` strings (`
 | `002_account_security.sql` | additive | committed |
 | `003_ephemeral_media.sql` | additive (+ one back-fill `UPDATE`) | committed |
 | `004_…`, `005_…` | **retired** (destructive data cleanups) | **archived, see 3.1** |
-| `006_account_state.sql` | additive | new, uncommitted — applied and tested on throwaway local databases only |
-| `007_consents_oauth.sql` | additive (new tables) | new, uncommitted — same |
+| `006_account_state.sql` | additive | committed locally in `378eac8` (not pushed) — applied and tested on throwaway local databases only; never applied to a hosted database |
+| `007_consents_oauth.sql` | additive (new tables) | committed locally in `378eac8` — same |
 
 Numbers are reserved by the roadmap in `IMPLEMENTATION_PLAN.md` §6 (**008 match lifecycle** and **009 safety** are next, then 010 profile/preferences, 011 notifications/jobs, 012 deletion/export/support, 013 media assets). Retired numbers (4, 5) and every used number are never reused: `dbSafety.orderMigrationFiles()` rejects a duplicate or a retired number, and `dbSafety.test.js` checks the directory is gap-free apart from the retired numbers.
 

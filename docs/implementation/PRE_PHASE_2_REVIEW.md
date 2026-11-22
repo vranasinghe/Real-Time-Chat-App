@@ -1,6 +1,6 @@
 # Pre-Phase 2 review (Phase 1 final review and git preparation)
 
-Date: 2026-11-22 · Branch: `phase-0-stabilise` (from `main` @ `a9cff77`) · Nothing is committed, pushed or deployed. No hosted service or database was contacted; `backend/.env` was never read.
+Date: 2026-11-22 · Branch: `phase-0-stabilise` (from `main` @ `a9cff77`) · When this review was written nothing was committed; the four commits in section 6 were created afterwards with your approval. Nothing is pushed or deployed. No hosted service or database was contacted; `backend/.env` was never read.
 
 ## 1. Verdict
 
@@ -8,7 +8,7 @@ Date: 2026-11-22 · Branch: `phase-0-stabilise` (from `main` @ `a9cff77`) · Not
 |---|---|
 | Is Phase 1 complete as specified, apart from external blockers? | **Yes**, except P1-10 Apple Sign In (blocked: no Apple developer credentials). |
 | Is the working tree safe to commit? | **Yes.** No secrets, `.env` files, logs, databases or build output are tracked or untracked-unignored; all existing user code and showcase work is preserved (section 5). |
-| Ready to start Phase 2 (admin/moderation/appeals work)? | **Yes, once you approve and I make the commits in section 6**, so Phase 2 starts from a clean, reviewable base. |
+| Ready to start Phase 2 (admin/moderation/appeals work)? | **Yes.** The four commits in section 6 now exist locally, so Phase 2 starts from a clean, reviewable base, once you approve the Phase 2 plan and its pending decisions. |
 | Ready to deploy to production? | **No.** See section 7: no native or real-provider (Google, Resend) run, hosted migration state unknown, Apple missing, dependency advisories open. |
 
 ## 2. Security review results
@@ -83,11 +83,20 @@ Changes made in this review to get there:
 
 131 changed paths (including this report): 61 modified, 3 deleted (`mobile/db/schema.sql`, `mobile/app/profile-setup/height.tsx`, `mobile/app/profile-setup/language.tsx`), 67 new untracked files. Nothing was reverted, stashed or overwritten.
 
-Your earlier uncommitted work is preserved and kept in its own first commit: the showcase catalogue (`backend/data/showcase-profiles.json`, `mobile/assets/profiles/catalog.json`, 12 → 16 profiles), the four new profile images (brooke, claire, ivy, sadie) in backend and mobile, `tessa.png` (an orphan; `showcase.test.js` lists it as a known orphan), `mobile/lib/demoData.ts`, `mobile/lib/showcaseProfiles.ts`, `mobile/components/ProfileDetailsModal.tsx`. Your removal of mock seed data in `backend/db.js` and mock stories in `mobile/lib/store.ts` stays inside those files and is committed with them.
+Your earlier work is preserved; the showcase part is the first commit (`2b8c384`): the showcase catalogue (`backend/data/showcase-profiles.json`, `mobile/assets/profiles/catalog.json`, 12 → 16 profiles), the four new profile images (brooke, claire, ivy, sadie) in backend and mobile, `tessa.png` (an orphan; `showcase.test.js` lists it as a known orphan), `mobile/lib/demoData.ts`, `mobile/lib/showcaseProfiles.ts`, `mobile/components/ProfileDetailsModal.tsx`. Your removal of mock seed data in `backend/db.js` is in `b11eb4b`, and of mock stories in `mobile/lib/store.ts` in `378eac8`, inside those files.
 
 The two deleted profile-setup screens (`height`, `language`) are replaced by the new server-driven steps (`basics`, `about`, `preferences`, ...); no other screen routes to them (the typed-routes check and `tsc` pass).
 
-## 6. Four-commit plan (not made; awaiting your approval)
+## 6. The four commits (created locally after approval; not pushed)
+
+| Order | Hash | Message |
+|---|---|---|
+| 1 | `2b8c384` | Add showcase profiles and demo catalogue |
+| 2 | `b11eb4b` | Add migration safety guard and retire local-only cleanup scripts |
+| 3 | `378eac8` | Implement Phase 1: adult eligibility, server-driven onboarding, verified e-mail, account status and Google sign-in |
+| 4 | `47b8a13` | Add Node 22 pin, test runner and strict CI gates (Phase 0) |
+
+A fifth, documentation-only commit followed (see `git log`). Below is the plan as it was approved; the results of the clean-worktree check run after committing are in the tracker session log and the phase reports.
 
 Order: **1 showcase, 2 migration safety, 3 Phase 1, 4 tooling and CI.** Your preference was showcase, tooling, migration safety, Phase 1. I moved tooling to the end for one reason: its gates (zero lint warnings, type check, web export, `test:all`) cannot pass until the mobile fixes that sit inside the Phase 1 screens are in, so tooling placed earlier would leave a red repository state. In this order every state is green on the backend, and states 3 and 4 are green end to end.
 
@@ -336,7 +345,7 @@ M  README.md
 
 - Commit 1 contains binary images and the owner's mock-removal in `demoData.ts`; the mock stories removal in `mobile/lib/store.ts` stays in commit 3 with the other changes to that file.
 - Git will warn about LF to CRLF on Windows (`core.autocrlf`); content is unaffected.
-- I will not push. Nothing is committed until you approve.
+- Nothing is pushed.
 
 ## 7. Remaining Phase 1 blockers and open items
 
@@ -355,6 +364,6 @@ None of these blocks starting Phase 2 on a local, unreleased branch. D-44 and D-
 
 ## 8. Phase 2 readiness
 
-**Ready to begin, on your go-ahead and after you approve the commit plan.** The server enforces eligibility and account status on REST and sockets, the migration path is additive and tested against legacy data, the test suites pass on Node 22 and 24, and the manual E2E scripts work again. Phase 2 should start by committing (or at least tagging) this base, then take D-44 and D-45 first because the admin and appeal tools depend on them.
+**Ready to begin once you approve the Phase 2 plan and decisions (the commit plan was approved and executed).** The server enforces eligibility and account status on REST and sockets, the migration path is additive and tested against legacy data, the test suites pass on Node 22 and 24, and the manual E2E scripts work again. Phase 2 starts from the committed base, then takes D-44 and D-45 first because the admin and appeal tools depend on them.
 
 Not started: Phase 2, any deployment, any hosted-database access.

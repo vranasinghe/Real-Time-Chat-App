@@ -1,5 +1,7 @@
 # Phase 1 — Completion report (authentication, onboarding, eligibility)
 
+> **Update (after this report was written):** Phase 1 is committed locally in `378eac8` (the tooling in `47b8a13`; not pushed, not deployed). Statements below about an uncommitted working tree describe the state when this report was written. Validation: `PRE_PHASE_2_REVIEW.md` and the tracker log.
+
 **Date:** 2026-11-22 · **Branch:** `phase-0-stabilise` (no new branch; same uncommitted working tree as Phase 0 and Release Gate A)
 Nothing was committed, pushed or deployed. No hosted database or service was contacted; no credential was read or printed (the developer `backend/.env` was only classified as "hosted", never opened for values, and every local run overrode its sensitive settings).
 

@@ -3,10 +3,18 @@
 Durable status file so work can resume across sessions. **Update it in the same change as the work it describes.**
 Design and rationale: `IMPLEMENTATION_PLAN.md`. Evidence for each `D-xx`: `BASELINE_AUDIT.md`. Phase results: `PHASE_00_COMPLETION_REPORT.md`.
 
-**Last updated:** 2026-11-22 · **Branch:** `phase-0-stabilise` (from `main` @ `a9cff77`; Phase 0, Release Gate A and Phase 1 work are **uncommitted** in the working tree, nothing pushed)
-**Current phase:** Phase 1 implemented and validated locally (web + backend; native not run), awaiting owner review. **Phase 2 not started.**
+**Last updated:** 2026-11-22 · **Branch:** `phase-0-stabilise` (from `main` @ `a9cff77`). Phase 0, Release Gate A and Phase 1 are committed **locally** in `2b8c384`, `b11eb4b`, `378eac8`, `47b8a13`; a fifth, documentation-only commit finalises tracking. **Nothing is pushed or deployed.**
+**Current phase:** Phase 1 is committed and validated locally (backend and web; native not run). **Phase 2: plan prepared (`PHASE_02_IMPLEMENTATION_PLAN.md`); decisions D2.1 to D2.10 are PENDING owner approval; no Phase 2 code, migration or dependency exists.**
 
 Status values: `COMPLETE` · `PARTIALLY COMPLETE` · `BLOCKED` · `NOT STARTED`. A task is COMPLETE only when it is implemented **and** verified as far as the environment allows; anything not verified is stated next to it.
+
+**Verification status (as of the final commit)**
+
+| Validated locally (isolated local PostgreSQL, Node 22.23.5, web build) | Not verified (needs something outside this machine) |
+|---|---|
+| Backend unit 77/77 and integration 51/51; chat and image E2E (10 + 8 checks); mobile type check 0 errors; lint 0 warnings; web export; each commit checked in a clean worktree | Native Android and iOS builds, devices, emulators, photo picker, native Google return |
+| Eligibility, onboarding, account-status and socket enforcement, OAuth state/PKCE/one-time code (Google stubbed), migrations 006/007 upgrade of synthetic legacy data | Real Google OAuth consent and redirect registration; Apple Sign In (BLOCKED, not built) |
+| Destructive-SQL guard, seeding guard, demo login off in production (config and tests) | Real Resend e-mail delivery; the GitHub Actions run; any hosted database, including what 004/005 recorded there; the production deployment of any of this |
 
 ---
 
@@ -14,9 +22,9 @@ Status values: `COMPLETE` · `PARTIALLY COMPLETE` · `BLOCKED` · `NOT STARTED`.
 
 | Phase | Name | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
-| 0 | Stabilise & document | P0 | M | — | **PARTIALLY COMPLETE** (all 9 tasks implemented; owner review/commit, remote CI run and Node 22 run outstanding) |
-| 1 | Authentication, onboarding, eligibility (starts with Release Gate A: P1-00, P1-00b) | P0 | XL | 0 | **PARTIALLY COMPLETE** (all backend work and the web app verified; Apple Sign In BLOCKED; native devices and real Google/mail not exercised) |
-| 2 | Safety, blocking, reporting, moderation (starts with migration 008) | P0 | XL | 1 | NOT STARTED |
+| 0 | Stabilise & document | P0 | M | — | **COMPLETE locally** (all 9 tasks implemented and committed in `2b8c384`, `b11eb4b`, `47b8a13`; validated on Node 22; remote CI run outstanding) |
+| 1 | Authentication, onboarding, eligibility (starts with Release Gate A: P1-00, P1-00b) | P0 | XL | 0 | **PARTIALLY COMPLETE** (committed in `378eac8`; all backend work and the web app verified; Apple Sign In BLOCKED; native devices and real Google/mail not exercised) |
+| 2 | Safety, blocking, reporting, moderation (starts with P2-00 and migration 008) | P0 | XL | 1 | **PLAN PREPARED, awaiting owner review** (`PHASE_02_IMPLEMENTATION_PLAN.md`); no code started |
 | 3 | Profile management & discovery | P1 (privacy P0) | XL | 1, 2 | NOT STARTED |
 | 4 | Matching & real-time chat | P0/P1 | L | 2, 3-04 | NOT STARTED |
 | 5 | Notifications & background jobs | P1 | L | 2, 4 | NOT STARTED |
@@ -33,7 +41,7 @@ Status values: `COMPLETE` · `PARTIALLY COMPLETE` · `BLOCKED` · `NOT STARTED`.
 | Suite | Baseline (before Phase 0) | After Phase 0 | After Release Gate A | After Phase 1 |
 |---|---|---|---|---|
 | `backend npm test` | 21 · 2 fail | 36 · all pass | 44 · all pass | **77 · all pass** (Node 24 **and** Node 22) |
-| `backend` integration (throwaway local PG) | 25 · 1 fail | 28 · all pass | 32 · all pass | **49 · all pass** (Node 24 **and** Node 22) |
+| `backend` integration (throwaway local PG) | 25 · 1 fail | 28 · all pass | 32 · all pass | **51 · all pass** (Node 24 **and** Node 22; 49 at first, +2 in the final review) |
 | `mobile tsc --noEmit` | 0 errors | 0 | 0 | **0** (Node 24 and 22) |
 | `mobile lint` | 30 warnings | 0 | 0 | **0 warnings** (Node 24 and 22) |
 | web export | not run | success | success | **success** (Node 24 and 22) |
@@ -61,6 +69,7 @@ Format: `ID · task · defect(s) · size · status`.
 - [x] **P0-S2** Fake-account seeding refused on hosted databases (`canSeedDevData`) · Release Gate A · **COMPLETE** (unit tests; behaviour on a hosted DB not exercised against a real hosted DB by design)
 - [x] **P0-S3** `PRODUCTION_CLEANUP_RUNBOOK.md` (owner-run, **not executed**) · Q7 · **COMPLETE** (as a runbook)
 - [x] Plan corrections R1–R7 applied to `IMPLEMENTATION_PLAN.md` · — · **COMPLETE**
+- [ ] Plan corrections R8–R10 (migration numbering 008 to 011, one row per pair, guard refinement) are **proposed** in `PHASE_02_IMPLEMENTATION_PLAN.md` and will be applied to `IMPLEMENTATION_PLAN.md` once the owner approves that plan
 
 ### Phase 1 — Authentication, onboarding, eligibility
 - [x] **P1-00** Remove `lat`/`lng` from discovery and likes-you payloads (public-field whitelist); hide "Nearby" chip; `complete-setup` refuses coordinates; leak regression tests · D-05 · S · **COMPLETE** (unit + integration tests; regression tests proven to fail on the pre-fix code; web preview checked). Stored coordinates in existing rows are untouched; own coordinates are still returned to their owner only.
@@ -79,16 +88,17 @@ Format: `ID · task · defect(s) · size · status`.
 - [x] **P1-12** Age-assurance + onboarding documentation (`SECURITY_CHECKLIST.md`, `API_REFERENCE.md`) · D-02 · S · **COMPLETE**
 
 ### Phase 2 — Safety & moderation
-- [ ] **P2-01a** Migration 008 match lifecycle (status, unmatch columns, partial unique index) — **first** · D-13 · M · NOT STARTED
-- [ ] **P2-01b** Migration 009 safety tables + audit append-only trigger · D-04 · M · NOT STARTED
+- [ ] **P2-00** Preparation: refine the destructive-SQL guard (`DROP NOT NULL` / `DROP DEFAULT` not destructive), branch, baseline · R10 · S · NOT STARTED
+- [ ] **P2-01a** Migration 008 match lifecycle (status, unmatch columns, `connected_at`; **one row per pair**, decision D2.1(A), no `DROP`) — **first** · D-13, D-48 · M · NOT STARTED
+- [ ] **P2-01b** Migration 009 user safety (blocks, reports, evidence files); moderation, audit and admin tables move to migration 010, limits to 011 · R8 · D-04 · M · NOT STARTED
 - [ ] **P2-02** Block helper + route-inventory test · D-04 · M · NOT STARTED
 - [ ] **P2-03** Block APIs · D-04 · S · NOT STARTED
 - [ ] **P2-04** Enforce blocks across all REST paths · D-04 · L · NOT STARTED
-- [ ] **P2-05** Socket revocation + generic `match_removed` · D-20 · M · NOT STARTED
+- [ ] **P2-05** Socket revocation + generic `match_removed`, `socket.data.tv`, 60-second status sweep, audience-scoped presence and story events, flood control · D-20, D-44, D-49, D-50 · M to L · NOT STARTED
 - [ ] **P2-06** Reports API (validation, evidence snapshot, dedupe, limits) · D-04 · M · NOT STARTED
 - [ ] **P2-07** Unmatch `DELETE /api/matches/:id` · D-04, D-13 · M · NOT STARTED
-- [ ] **P2-08** Staff roles, TOTP MFA (Q4), admin API · D-04 · L · NOT STARTED
-- [ ] **P2-09** Moderation actions, appeals, audit log · D-04 · L · NOT STARTED
+- [ ] **P2-08** Separate staff credentials, roles, TOTP MFA with step-up (Q4), admin API; owner-run enrolment CLI · D-04 · L · NOT STARTED
+- [ ] **P2-09** Moderation actions, append-only audit log, appeals via a scoped appeal token · D-04, D-45 · L · NOT STARTED
 - [ ] **P2-10** Admin SPA · D-04 · L · NOT STARTED
 - [ ] **P2-11** Triage rules + per-account rate limits · D-21 · M · NOT STARTED
 - [ ] **P2-12** Mobile block/report/unmatch UI, blocked-users and suspended screens · D-04 · M · NOT STARTED
@@ -219,6 +229,9 @@ Format: `ID · task · defect(s) · size · status`.
 | **D-45** | P1 | Suspended / banned members cannot sign in, so they have **no appeal or data-request channel** yet | Phase 2 (appeals), Phase 6 (export/delete) | open |
 | **D-46** | P1 | Apple Sign In missing (required on iOS if Google sign-in is offered) | P1-10 | **BLOCKED** (Apple developer account) |
 | **D-47** | P2 | Manual e2e scripts `backend/test/chat.e2e.js` and `images.e2e.js` register without a date of birth / policies / strong password and were updated for the new registration + onboarding flow; `npm run test:e2e` runs them on a throwaway local stack (chat 10 checks, images 8 checks pass) | — | **fixed** (final review) |
+| **D-48** | P1 | `db_init.sql` runs on every boot and merges (deletes) duplicate match rows per pair, then re-adds `UNIQUE (user_a, user_b)`: incompatible with several match rows per pair (found while planning Phase 2) | P2-01a (design D2.1 A) | open |
+| **D-49** | P1 | `socket.data.tv` is never set and `join_room` ignores `loadSession().problem`: token-version revocation is not re-checked on a held socket | P2-05 | open |
+| **D-50** | P1 | `status_change` presence and global `stories_changed` are emitted to audiences that include blocked, unmatched or unrelated members | P2-05 | open |
 
 ---
 
@@ -249,8 +262,9 @@ Recorded 2026-11-22. **Approved** = implementation approval (build to it). **Pro
 
 | Item | Needed from | Affects |
 |---|---|---|
-| Review and commit of the working tree (Phase 0, Gate A, Phase 1); decision on `tessa.png` | Owner | Phase 2 start (can proceed in development without it) |
-| ~~Go-ahead to edit `render.yaml`~~ — done in the working tree (uncommitted); **deploying it is the owner's decision** | Owner | P1-00b |
+| ~~Review and commit of the working tree~~ — **done locally** (`2b8c384`, `b11eb4b`, `378eac8`, `47b8a13` and the documentation commit); **pushing is the owner's decision**. Decision on `tessa.png` still open (kept, nothing deleted) | Owner | Phase 2 start (can proceed in development without it) |
+| **Phase 2 decisions D2.1 to D2.10** (`PHASE_02_IMPLEMENTATION_PLAN.md` section 4): match lifecycle, rematch rule, staff credentials, staff roster and enrolment, dashboard hosting, retention, suspected-minor evidence, suspension notices, dashboard test tooling, image classification. **All PENDING; none approved.** | Owner (and counsel for D2.6, D2.7) | D2.1: P2-01a; D2.3 to D2.5: P2-08, P2-10; D2.6, D2.7: P2-06 |
+| ~~Go-ahead to edit `render.yaml`~~ — done and committed locally in `378eac8`; **deploying it is the owner's decision** | Owner | P1-00b |
 | Execution of the production cleanup runbook; recovery point | Owner | before any real-user exposure |
 | A GitHub run of the updated CI workflow; a Node 22 run | Owner / CI | P0-07 |
 | **Resend API key + verified sender domain — now REQUIRED before the next production deploy** (the backend refuses to start in production without them) | Owner | any production deploy; P1-08 live test |
@@ -287,7 +301,10 @@ Recorded 2026-11-22. **Approved** = implementation approval (build to it). **Pro
 | Date | Work | Result |
 |---|---|---|
 | 2026-11-22 | Audit and planning: baseline audit, implementation plan, tracker. No code changed. | Planning complete. |
-| 2026-11-22 | **Phase 0 implemented** on branch `phase-0-stabilise`: master prompt moved; migration/seeding safety guards; stale tests replaced; lint 30 → 0; Node pin, `test:all`, CI extension, audit report; misleading UI removed; legacy schema archived; docs, cleanup runbook and plan corrections written. | `npm run test:all` 5/5 pass; unit 36/36, integration 28/28. Not committed, not pushed, no hosted service contacted. See `PHASE_00_COMPLETION_REPORT.md`. |
+| 2026-11-22 | **Phase 0 implemented** on branch `phase-0-stabilise`: master prompt moved; migration/seeding safety guards; stale tests replaced; lint 30 → 0; Node pin, `test:all`, CI extension, audit report; misleading UI removed; legacy schema archived; docs, cleanup runbook and plan corrections written. | `npm run test:all` 5/5 pass; unit 36/36, integration 28/28. Not committed at that time (committed later in `2b8c384`, `b11eb4b` and `47b8a13`); not pushed; no hosted service contacted. See `PHASE_00_COMPLETION_REPORT.md`. |
 | 2026-11-22 | **Phase 1 implemented**: Task 0 (archived 004/005, Node 22 run), migrations 006/007, age module, registration + consent, eligibility on REST/sockets, onboarding API + screens, mandatory e-mail verification, OAuth state/PKCE/one-time code, restricted `complete-setup`; docs. | Unit 77/77, integration 49/49 (also on Node 22), tsc 0, lint 0, export OK; web journey driven in a browser against a local backend. Native, real Google/Resend, Apple not run. See `PHASE_01_COMPLETION_REPORT.md`. |
-| 2026-11-22 | **Phase 1 final review** (git/security/migration review): OAuth race and strict-boolean tests, SQL-vs-JS adulthood agreement test, 006/007 upgrade-without-data-loss test, manual e2e scripts updated + `npm run test:e2e`, commit plan prepared. | Node 24 `test:all` 5/5; Node 22.23.5: unit 77/77, integration 51/51, e2e 10+8, tsc 0, lint 0, export OK. Nothing committed, pushed or deployed. See `PRE_PHASE_2_REVIEW.md`. |
-| 2026-11-22 | **Release Gate A implemented** (P1-00 coordinates, P1-00b demo isolation) on the same uncommitted branch. | Unit 44/44, integration 32/32, tsc 0 errors, lint 0 warnings, web export OK. Not committed, pushed or deployed; no hosted service contacted. See `PHASE_01_RELEASE_GATE_A_REPORT.md`. |
+| 2026-11-22 | **Phase 1 final review** (git/security/migration review): OAuth race and strict-boolean tests, SQL-vs-JS adulthood agreement test, 006/007 upgrade-without-data-loss test, manual e2e scripts updated + `npm run test:e2e`, commit plan prepared. | Node 24 `test:all` 5/5; Node 22.23.5: unit 77/77, integration 51/51, e2e 10+8, tsc 0, lint 0, export OK. Nothing pushed or deployed (the commits were made afterwards, see the next row). See `PRE_PHASE_2_REVIEW.md`. |
+| 2026-11-22 | **Release Gate A implemented** (P1-00 coordinates, P1-00b demo isolation) on the same uncommitted branch. | Unit 44/44, integration 32/32, tsc 0 errors, lint 0 warnings, web export OK. Not committed at that time (committed later in `378eac8`); not pushed or deployed; no hosted service contacted. See `PHASE_01_RELEASE_GATE_A_REPORT.md`. |
+| 2026-11-22 | **Four local commits created** (not pushed) on `phase-0-stabilise`: `2b8c384` showcase, `b11eb4b` migration safety, `378eac8` Phase 1, `47b8a13` tooling and CI. Each commit checked in a clean worktree on Node 22 with Expo route types regenerated. | Commit 1: unit 28/28, tsc pass, lint fails on main's existing 30 warnings. Commit 2: unit 38/38, integration 25/25, tsc pass, same 30 lint warnings. Commits 3 and 4: unit 77/77, integration 51/51, tsc 0, lint 0, web export OK. Final `npm run test:all` 5/5 and `npm run test:e2e` (10 + 8 checks) on Node 22; tree clean. See `PRE_PHASE_2_REVIEW.md`. |
+| 2026-11-22 | **Documentation commit** (fifth, docs only): tracker and Phase 2 plan finalised, outdated "uncommitted" statements corrected, Phase 2 decisions D2.1 to D2.10 recorded as pending. | No application code, migration or dependency changed; no new test run needed. |
+| 2026-11-22 | **Phase 2 implementation plan prepared** (`PHASE_02_IMPLEMENTATION_PLAN.md`): no code changed; decisions D2.1 to D2.10 await the owner. | Plan only. |

@@ -1,5 +1,7 @@
 # Phase 1 — Release Gate A report (P1-00 and P1-00b)
 
+> **Update (after this report was written):** Release Gate A is committed locally in `378eac8` (not pushed, not deployed). Statements below about an uncommitted working tree describe the state when this report was written.
+
 **Date:** 2026-11-22 · **Branch:** `phase-0-stabilise` (no new branch; same uncommitted working tree as Phase 0) · **Scope:** only the two Release Gate A fixes. The authentication/onboarding/eligibility rewrite (P1-01 … P1-12) was **not started**.
 Nothing was committed, pushed or deployed. No hosted database or service was contacted; no destructive SQL was run anywhere except inside throwaway local databases created by the test harness.
 

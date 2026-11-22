@@ -37,7 +37,7 @@ Quick start: copy `backend/.env.example` to `backend/.env` and `mobile/.env.exam
 | iOS | **Not done / not verified** |
 | Vercel proxy forwards the session cookie | **Not verified** until deployed |
 | Email verification / password reset delivery | **Not verified** (no email provider configured) |
-| Production deployment of these changes | **Not done**: nothing is committed or deployed |
+| Production deployment of these changes | **Not done**: the changes are committed locally (`2b8c384`, `b11eb4b`, `378eac8`, `47b8a13`, plus a documentation commit) but not pushed, and nothing is deployed |
 
 
 ## 🚀 Key Features

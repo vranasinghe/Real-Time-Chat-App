@@ -1,5 +1,7 @@
 # Phase 0 — Completion report
 
+> **Update (after this report was written):** the owner reviewed and approved the commits. Phase 0 is committed locally in `2b8c384`, `b11eb4b` and `47b8a13` (not pushed); a Node 22 run was done in the Phase 1 final review. A remote CI run is still outstanding. Statements below that nothing is committed describe the state when this report was written.
+
 **Date:** 2026-11-22 · **Branch:** `phase-0-stabilise` (created from `main` @ `a9cff77`) · **Status: PARTIALLY COMPLETE** — all nine tasks are implemented and verified locally; owner review/commit, a remote CI run and a Node 22 run are outstanding (§9).
 Nothing was committed or pushed. No hosted service (Render, Neon, Vercel, EAS, stores) was contacted, nothing was deployed, no credential was read or printed.
 
