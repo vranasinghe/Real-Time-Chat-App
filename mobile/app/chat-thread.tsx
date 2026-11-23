@@ -31,7 +31,8 @@ import { FEATURES } from "@/lib/features";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { Image as MediaImage } from "expo-image";
 import { pickProfileImage, PickedImage } from "@/lib/imagePicker";
-import { isMediaActive, privateMediaSource, uploadEphemeralMedia } from "@/lib/media";
+import { isMediaActive, uploadEphemeralMedia } from "@/lib/media";
+import { PrivateImage } from "@/components/PrivateImage";
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -51,7 +52,6 @@ export default function ChatThreadScreen() {
   const matches = useAppStore((s) => s.matches);
   const allMessages = useAppStore((s) => s.messages);
   const user = useAppStore((s) => s.user);
-  const token = useAppStore((s) => s.token);
   const isDemo = useAppStore((s) => s.isDemo);
   const thread = useAppStore((s) => (matchId ? s.threads[matchId] : undefined));
   const { sendMessage, retryMessage, loadThread, loadOlderMessages, markThreadRead, setActiveThread } =
@@ -178,7 +178,7 @@ export default function ChatThreadScreen() {
           ]}
         >
           {msg.kind === "image" ? <>
-            <MediaImage source={privateMediaSource(msg.body, token)} style={{ width: 210, height: 260, borderRadius: 12 }} contentFit="cover" cachePolicy="none" accessibilityLabel="Shared photo" />
+            <PrivateImage uri={msg.body} style={{ width: 210, height: 260, borderRadius: 12 }} contentFit="cover" accessibilityLabel="Shared photo" />
             <Text style={[styles.bubbleTime, { marginTop: 8 }]}>Photo · Deletes after 12 hours</Text>
           </> : <Text style={styles.bubbleText}>{msg.body}</Text>}
           <Text style={[styles.bubbleTime, failed && styles.bubbleTimeFailed]}>
@@ -378,7 +378,7 @@ export default function ChatThreadScreen() {
         <Modal visible={viewedPhoto !== null} transparent animationType="fade" onRequestClose={() => setViewedPhoto(null)}>
           <View style={{ flex: 1, backgroundColor: "#07030F", paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }}>
             <Pressable accessibilityRole="button" accessibilityLabel="Close photo" onPress={() => setViewedPhoto(null)} style={{ alignSelf: "flex-end", padding: 16 }}><X color="#FFFFFF" size={24} /></Pressable>
-            {viewedPhoto && <MediaImage source={privateMediaSource(viewedPhoto.body, token)} style={{ flex: 1 }} contentFit="contain" cachePolicy="none" />}
+            {viewedPhoto && <PrivateImage uri={viewedPhoto.body} style={{ flex: 1 }} contentFit="contain" />}
           </View>
         </Modal>
         {/* Attachment Modal */}
