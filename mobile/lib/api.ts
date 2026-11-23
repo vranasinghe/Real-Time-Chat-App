@@ -81,10 +81,11 @@ export async function authFetch(path: string, init: RequestOptions = {}): Promis
   if (IS_WEB) {
     headers.set("X-Client-Platform", "web");
     headers.set("X-Requested-With", "dateza"); // CSRF: needs a CORS preflight, so other sites can't send it
-  } else {
-    const token = hooks.getToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
   }
+  // Native always has a token. Web has one only for a per-tab live demo session; it
+  // takes precedence over any cookie, so each tab stays the persona it signed in as.
+  const token = hooks.getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
   if (rest.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
   const request: RequestInit = {

@@ -9,6 +9,9 @@ The welcome page links to Live Demo, and Sign In offers Alex and Elena directly.
 These are the only two selectable demo logins. They are pre-matched: open one
 browser/device as Alex and another as Elena to try live messaging, presence,
 photo messages, and statuses. Demo media follows the existing expiry rules.
+On web, a demo session belongs to its browser tab (a token in sessionStorage, not
+the shared cookie), so Alex and Elena can also be open in two tabs of the same
+browser. Each new tab picks its persona again.
 
 Sixteen fictional catalogue profiles are created in the demo audience on first
 login. They pre-like both personas so visitors can try swiping and mutual
