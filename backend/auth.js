@@ -185,7 +185,9 @@ router.post("/logout", (req, res) => {
   if (via === "cookie" && !session.passesCsrf(req)) {
     return res.status(403).json({ error: "Request blocked (CSRF check failed)", code: "csrf" });
   }
-  session.clearSessionCookie(res);
+  // A bearer session (native, or a per-tab web demo session) has no cookie of its own;
+  // don't sign out a real member whose cookie lives in the same browser.
+  if (via !== "bearer") session.clearSessionCookie(res);
   res.status(200).json({ ok: true });
 });
 

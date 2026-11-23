@@ -18,6 +18,7 @@ const db = require("./db");
 const config = require("./config");
 const logger = require("./logger");
 const session = require("./session");
+const eligibility = require("./eligibility");
 const { storeImage } = require("./images");
 
 const router = express.Router();
@@ -178,6 +179,15 @@ router.post("/", async (req, res) => {
     const user = result.rows[0];
     delete user.password;
 
+    // Web: a cookie is shared by every tab of the browser, so signing in as Elena in
+    // one tab would silently turn an Alex tab into Elena too (and her messages would
+    // never reach "Alex"). Demo sessions on web therefore get a bearer token that the
+    // app keeps per tab (sessionStorage) instead of the shared cookie. A real member's
+    // cookie in the same browser is left untouched.
+    if (session.isWebClient(req)) {
+      const token = session.signAccessToken(user, "web");
+      return res.status(200).json({ token, user: eligibility.withEligibility(user) });
+    }
     session.sendSession(req, res, user);
   } catch (err) {
     logger.error("demo login failed", err);

@@ -10,7 +10,7 @@ import * as Crypto from "expo-crypto";
 import { DEMO_USER, DEMO_PROFILES, DEMO_LIKES_YOU } from "./demoData";
 import { BACKEND_URL, CONFIG_ERROR, IS_WEB, resolveMediaUrl } from "./config";
 import { ApiError, apiJson, authFetch, configureApi, fetchSocketTicket } from "./api";
-import { clearToken, loadToken, saveToken } from "./tokenStore";
+import { clearToken, loadToken, peekTabToken, saveToken } from "./tokenStore";
 import { isMediaActive, MEDIA_LIFETIME_MS, uploadEphemeralMedia } from "./media";
 
 export { resolveMediaUrl };
@@ -77,7 +77,7 @@ interface AppState {
   // Auth & Session
   user: Profile | null;
   session: boolean;
-  token: string | null; // Native only (kept in memory, persisted in secure storage). Always null on web.
+  token: string | null; // Native: persisted in secure storage. Web: null, except a per-tab live demo session (sessionStorage).
   profileSetupComplete: boolean;
   isDemo: boolean; // Offline demo session: no backend, no sign-in, nothing leaves the device (explicitly chosen)
   isInitialized: boolean; // Persisted state loaded and the stored session located (not persisted)
@@ -220,6 +220,13 @@ async function establishSession(data: { token?: string; user: Profile }, profile
     if (!data.token) throw new ApiError("The server did not return a session. Please try again.", "parse");
     token = data.token;
     await saveToken(token);
+  } else if (data.token) {
+    // Web live demo: a per-tab session (see tokenStore.ts)
+    token = data.token;
+    await saveToken(token);
+  } else {
+    // Web cookie session: drop any demo token this tab had, or it would win over the cookie
+    await clearToken();
   }
   resetRealtime();
   useAppStore.setState({
@@ -324,14 +331,25 @@ export const useAppStore = create<AppState>()(
             await saveToken(legacy).catch(() => {});
           }
           set({ token });
+        } else {
+          // Web: a live demo session belongs to this tab only (null for cookie sessions)
+          set({ token: await loadToken() });
         }
 
         const { session, token } = get();
+        if (!session && IS_WEB && token) {
+          // The saved state is shared by every tab, so another tab may have signed out.
+          // This tab still has its own demo session: restore it before showing anything.
+          set({ session: true, isDemo: false });
+          await verifySession();
+          set({ isInitialized: true });
+          return;
+        }
         if (session && !IS_WEB && !token) {
           // Signed in according to saved state, but the credential is gone
           await clearSessionLocal();
         } else if (!session) {
-          if (!IS_WEB) await clearToken();
+          await clearToken();
           set({ profiles: [], likesYou: [] });
         }
         set({ isInitialized: true });
@@ -1126,7 +1144,9 @@ export const useAppStore = create<AppState>()(
 );
 
 configureApi({
-  getToken: () => useAppStore.getState().token,
+  // Web: read the tab token directly too, so requests made before initializeStore finishes
+  // (e.g. a chat screen opened by reloading the page) still carry this tab's demo session.
+  getToken: () => useAppStore.getState().token ?? peekTabToken(),
   // The server rejected our session (expired / revoked): drop it and show the sign-in flow
   onUnauthorized: () => {
     if (isLiveSession(useAppStore.getState())) void clearSessionLocal();
