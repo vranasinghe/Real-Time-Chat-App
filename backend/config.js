@@ -25,7 +25,7 @@ if (!env.DATABASE_URL) errors.push("DATABASE_URL is required");
 
 // Origins allowed to call the API / open sockets from a browser. Native apps send no Origin.
 const corsOrigins = list(env.CORS_ORIGIN || (isProduction
-  ? "https://real-time-chat-app-tau-six.vercel.app,https://real-time-chat-app-odrw.vercel.app"
+  ? "https://real-time-chat-app-mobile-nu.vercel.app"
   : ""));
 if (corsOrigins.length === 0 && isProduction) {
   warnings.push("CORS_ORIGIN is not set: browsers from any origin can call this API. Set it to your web app URL(s).");
