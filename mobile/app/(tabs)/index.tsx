@@ -16,8 +16,8 @@ import { useAppStore, Profile, Story } from "@/lib/store";
 import { SwipeDeck } from "@/components/SwipeDeck";
 import { ProfileDetailsModal } from "@/components/ProfileDetailsModal";
 import { StoryVideo } from "@/components/StoryVideo";
-import { Image as StatusImage } from "expo-image";
-import { isMediaActive, privateMediaSource } from "@/lib/media";
+import { isMediaActive } from "@/lib/media";
+import { PrivateImage } from "@/components/PrivateImage";
 import * as ImagePicker from "expo-image-picker";
 
 
@@ -48,7 +48,6 @@ export default function DiscoveryScreen() {
     addStory,
     deleteStory,
     fetchStories,
-    token,
   } = useAppStore();
 
   const [unreadNotifications, setUnreadNotifications] = useState(true);
@@ -624,11 +623,10 @@ export default function DiscoveryScreen() {
                     onEnd={handleNextStory}
                   />
                 ) : (
-                  <StatusImage
-                    source={privateMediaSource(selectedStories[currentStoryIndex].media_url, token)}
+                  <PrivateImage
+                    uri={selectedStories[currentStoryIndex].media_url}
                     style={styles.storyViewerMedia}
                     contentFit="contain"
-                    cachePolicy="none"
                   />
                 )}
 

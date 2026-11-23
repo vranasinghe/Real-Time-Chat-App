@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { API_BASE, BACKEND_URL } from "./config";
 import { authFetch } from "./api";
@@ -10,6 +11,28 @@ export function privateMediaSource(uri: string, token: string | null) {
   const url = uri.startsWith("/api/media/") ? `${Platform.OS === "web" ? API_BASE : BACKEND_URL}${uri}` : uri;
   // Only attach credentials to this app's private endpoint, never to external URLs.
   return { uri: url, ...(Platform.OS !== "web" && token && uri.startsWith("/api/media/") ? { headers: { Authorization: `Bearer ${token}` } } : {}) };
+}
+
+// Web live-demo sessions carry a per-tab bearer token instead of the shared cookie, and an <img>/<video>
+// element cannot send an Authorization header. So on web with a token, download the private file with the
+// header and show it from a temporary blob URL. Everywhere else the normal source is used unchanged.
+// Returns null while the file is loading (or if it could not be loaded).
+export function usePrivateMediaSource(uri: string, token: string | null) {
+  const needsFetch = Platform.OS === "web" && !!token && uri.startsWith("/api/media/");
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  useEffect(() => {
+    setBlobUrl(null);
+    if (!needsFetch) return;
+    let alive = true;
+    let created: string | null = null;
+    authFetch(uri)
+      .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.blob(); })
+      .then(blob => { if (alive) { created = URL.createObjectURL(blob); setBlobUrl(created); } })
+      .catch(() => {});
+    return () => { alive = false; if (created) URL.revokeObjectURL(created); };
+  }, [uri, needsFetch]);
+  if (needsFetch) return blobUrl ? { uri: blobUrl } : null;
+  return privateMediaSource(uri, token);
 }
 
 export async function uploadEphemeralMedia(uri: string, type: "image" | "video", purpose: "chat" | "story", matchId?: string) {
