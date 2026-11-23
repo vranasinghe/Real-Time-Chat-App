@@ -74,7 +74,7 @@ router.get("/:id", authenticateToken, requireEligible, async (req, res) => {
          (e.purpose = 'chat' AND EXISTS (SELECT 1 FROM matches m WHERE m.id = e.match_id AND (m.user_a = $2 OR m.user_b = $2)))
          OR (e.purpose = 'story' AND (e.owner_id = $2 OR (EXISTS (SELECT 1 FROM stories s WHERE s.media_id = e.id)
            AND ${eligibility.candidateSql("p")}
-           AND (p.is_demo = false OR EXISTS (SELECT 1 FROM profiles v WHERE v.id = $2 AND v.is_demo))))))`,
+           AND (p.is_demo = (SELECT v.is_demo FROM profiles v WHERE v.id = $2))))))`,
       [req.params.id, req.user.id]
     );
     const media = result.rows[0];
@@ -97,7 +97,7 @@ storiesRouter.use(authenticateToken, requireEligible);
 storiesRouter.get("/", async (req, res) => {
   try {
     const result = await db.query(`SELECT ${STORY_FIELDS} FROM stories s JOIN ephemeral_media e ON e.id = s.media_id JOIN profiles p ON p.id = s.user_id
-      WHERE e.expires_at > NOW() AND (p.id = $1 OR ${eligibility.candidateSql("p")}) AND (p.is_demo = false OR EXISTS (SELECT 1 FROM profiles v WHERE v.id = $1 AND v.is_demo))
+      WHERE e.expires_at > NOW() AND (p.id = $1 OR ${eligibility.candidateSql("p")}) AND (p.is_demo = (SELECT v.is_demo FROM profiles v WHERE v.id = $1))
       ORDER BY s.created_at DESC LIMIT 200`, [req.user.id]);
     res.set("Cache-Control", "no-store").json(result.rows);
   } catch (err) { logger.error("story feed failed", err); res.status(500).json({ error: "Could not load statuses." }); }

@@ -106,6 +106,8 @@ router.post("/", authenticateToken, requireEligible, async (req, res) => {
   }
 
   try {
+    const audience = await db.query("SELECT 1 FROM profiles WHERE id = $1 AND is_demo = $2", [targetUserId, !!req.account.is_demo]);
+    if (!audience.rows.length) return res.status(404).json({ error: "That profile is not available" });
     // Sort user_a and user_b
     const user_a = userId < targetUserId ? userId : targetUserId;
     const user_b = userId < targetUserId ? targetUserId : userId;

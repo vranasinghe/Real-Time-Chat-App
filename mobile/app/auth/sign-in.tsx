@@ -233,7 +233,7 @@ export default function SignInScreen() {
                 })}
               </View>
               <Text className="text-text-secondary font-sans text-[12px] text-center mt-3 leading-5">
-                Shared accounts for exploring Dateza: swipe, match, chat, send photos and post statuses.
+                Public shared accounts: swipe fictional profiles, chat, send photos and post statuses. Other visitors can see demo activity. Do not share private information.
               </Text>
             </View>
           )}

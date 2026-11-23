@@ -4,8 +4,7 @@
 // two devices can start chatting in real time without signing up: device 1 picks
 // Alex, device 2 picks Elena.
 //
-// Off unless DEMO_LOGIN_ENABLED=true, and in production also DEMO_ENVIRONMENT=isolated (separate demo
-// service + database; see config.js). Demo accounts:
+// Off unless DEMO_LOGIN_ENABLED=true, including production. Demo accounts:
 //   - have an unusable random password (only this endpoint can log into them)
 //   - are flagged is_demo and never shown to real users in discovery
 //   - have their chat history trimmed to the last DEMO_RETENTION_HOURS (default 24)
@@ -84,7 +83,8 @@ const retentionHours = () => {
 async function ensureDemoAccounts() {
   // Retired personas (e.g. the old "Sam"): deleting the profile cascades to its
   // swipes, matches and messages
-  await db.query("DELETE FROM profiles WHERE is_demo = true AND id <> ALL($1)", [DEMO_IDS]);
+  await db.query("DELETE FROM profiles WHERE is_demo = true AND id = 'demo-sam'");
+  await require("./showcaseProfiles").seedShowcaseProfiles((sql, params) => db.query(sql, params), { demo: true });
 
   for (const p of Object.values(PERSONAS)) {
     const unusablePassword = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
@@ -103,6 +103,16 @@ async function ensureDemoAccounts() {
     );
   }
 
+  // Fictional profiles pre-like the personas so visitors can try mutual matching.
+  // These catalogue entries are not live people or automated chat bots.
+  await db.query(
+    `INSERT INTO swipes (swiper_id, swipee_id, direction)
+     SELECT p.id, persona.id, 'like' FROM profiles p
+     CROSS JOIN unnest($1::varchar[]) AS persona(id)
+     WHERE p.is_demo = true AND p.id LIKE 'demo-showcase-%'
+     ON CONFLICT (swiper_id, swipee_id) DO NOTHING`,
+    [DEMO_IDS]
+  );
   const [a, b] = [...DEMO_IDS].sort();
   for (const [swiper, swipee] of [[a, b], [b, a]]) {
     await db.query(
