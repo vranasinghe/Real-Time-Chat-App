@@ -31,24 +31,14 @@ if (corsOrigins.length === 0 && isProduction) {
   warnings.push("CORS_ORIGIN is not set: browsers from any origin can call this API. Set it to your web app URL(s).");
 }
 
-// Shared demo logins (Alex / Elena) let anyone sign in without a password. They must never exist on the
-// consumer production service, so in production the flag alone is NOT enough: the operator must also
-// set DEMO_ENVIRONMENT=isolated, which asserts "this is a separate demo service with its own database".
-// Otherwise the request is ignored (and logged as a warning at startup). Outside production the flag
-// works as before. Pure function so it can be tested without loading the whole configuration.
+// Public demo sessions are explicitly enabled by the operator. Demo profiles and
+// interactions use a separate audience from real members on the same service.
 function resolveDemoLogin(e, production) {
   const requested = e.DEMO_LOGIN_ENABLED === "true";
   if (!requested) return { enabled: false, requested, blocked: false };
-  if (!production) return { enabled: true, requested, blocked: false };
-  if (e.DEMO_ENVIRONMENT === "isolated") return { enabled: true, requested, blocked: false };
-  return { enabled: false, requested, blocked: true };
+  return { enabled: true, requested, blocked: false };
 }
 const demoLogin = resolveDemoLogin(env, isProduction);
-if (demoLogin.blocked) {
-  warnings.push(
-    "DEMO_LOGIN_ENABLED=true is IGNORED in production: shared demo logins are only allowed on a separate demo service with its own database (also set DEMO_ENVIRONMENT=isolated there)."
-  );
-}
 
 // Production can run without an email provider. Verification is optional in that mode;
 // never mark an unverified address as verified. An explicit true still requires delivery.

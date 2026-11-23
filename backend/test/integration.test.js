@@ -1145,6 +1145,24 @@ test("demo accounts stay usable members when the demo is on (they are finished, 
   socket.close();
 });
 
+test("public demo personas browse fictional profiles and cannot swipe real members", async () => {
+  const status = await new WebClient().call("GET", "/api/auth/demo/status");
+  assert.deepEqual(status.data.personas.map(p => p.key).sort(), ["alex", "elena"]);
+  const alex = new NativeClient();
+  alex.token = (await alex.call("POST", "/api/auth/demo", { persona: "alex" })).data.token;
+  const real = await signUpWeb("demo-audience");
+  const list = await alex.call("GET", "/api/profiles/discovery");
+  assert.ok(list.data.length >= 16);
+  assert.ok(list.data.every(p => p.id.startsWith("demo-showcase-")));
+  assert.equal((await real.c.call("GET", "/api/profiles/discovery")).data.some(p => p.id.startsWith("demo-")), false);
+  assert.equal((await alex.call("POST", "/api/swipes", { swipee_id: real.user.id, direction: "like" })).status, 404);
+  assert.equal((await real.c.call("POST", "/api/swipes", { swipee_id: "demo-alex", direction: "like" })).status, 404);
+  assert.equal((await alex.call("POST", "/api/matches", { targetUserId: real.user.id })).status, 404);
+  const liked = await alex.call("POST", "/api/swipes", { swipee_id: list.data[0].id, direction: "like" });
+  assert.equal(liked.status, 200);
+  assert.ok(liked.data.activeMatch);
+});
+
 // ---- Google OAuth: state, PKCE, one-time code exchange ---------------------------------------------
 
 test("google sign-in: secure state and PKCE, a one-time code in the redirect (never a token), single-use exchange", async () => {

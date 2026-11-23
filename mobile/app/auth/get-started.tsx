@@ -150,6 +150,13 @@ export default function GetStartedScreen() {
               <Text style={styles.signInText}>Sign In</Text>
             </Pressable>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/live-demo")}
+            style={({ pressed }) => [styles.signIn, { alignSelf: "center" }, pressed && styles.pressed]}
+          >
+            <Text style={styles.signInText}>Try the live demo · Alex & Elena</Text>
+          </Pressable>
         </View>
 
       </ScrollView>

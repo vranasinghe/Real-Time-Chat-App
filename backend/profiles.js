@@ -27,7 +27,7 @@ function toPublicProfile(row) {
 
 // Live demo accounts are only visible to other demo accounts, never to real users.
 // Expects the viewer's id as $1.
-const VISIBLE_TO_VIEWER = `(p.is_demo = false OR EXISTS (SELECT 1 FROM profiles viewer WHERE viewer.id = $1 AND viewer.is_demo))`;
+const VISIBLE_TO_VIEWER = `p.is_demo = (SELECT viewer.is_demo FROM profiles viewer WHERE viewer.id = $1)`;
 
 // Fetch discovery profiles for swipe feed
 router.get("/discovery", authenticateToken, eligibility.requireEligible, async (req, res) => {

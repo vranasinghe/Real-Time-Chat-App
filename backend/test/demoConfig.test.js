@@ -21,27 +21,11 @@ const BACKEND = path.join(__dirname, "..");
 
 // ---- decision table ----------------------------------------------------------------------
 
-test("resolveDemoLogin: production needs the flag AND DEMO_ENVIRONMENT=isolated; development needs only the flag", () => {
-  const r = (env, production) => config.resolveDemoLogin(env, production);
-  // off by default
-  assert.equal(r({}, true).enabled, false);
-  assert.equal(r({}, false).enabled, false);
-  // production: the flag alone is ignored (and reported as blocked)
-  assert.deepEqual(r({ DEMO_LOGIN_ENABLED: "true" }, true), { enabled: false, requested: true, blocked: true });
-  // production: both together = an explicitly isolated demo service
-  assert.equal(r({ DEMO_LOGIN_ENABLED: "true", DEMO_ENVIRONMENT: "isolated" }, true).enabled, true);
-  // production: isolation marker without the flag does not turn anything on
-  assert.equal(r({ DEMO_ENVIRONMENT: "isolated" }, true).enabled, false);
-  // other marker values do not count
-  for (const v of ["", "true", "demo", "ISOLATED", "1"]) {
-    assert.equal(r({ DEMO_LOGIN_ENABLED: "true", DEMO_ENVIRONMENT: v }, true).enabled, false, `DEMO_ENVIRONMENT=${v}`);
-  }
-  // development and tests keep working
-  assert.equal(r({ DEMO_LOGIN_ENABLED: "true" }, false).enabled, true);
-  // the flag is strict: only the exact string "true"
-  for (const v of ["1", "TRUE", "True", "yes", "on", " true", "false", ""]) {
-    assert.equal(r({ DEMO_LOGIN_ENABLED: v, DEMO_ENVIRONMENT: "isolated" }, true).enabled, false, `DEMO_LOGIN_ENABLED=${JSON.stringify(v)}`);
-    assert.equal(r({ DEMO_LOGIN_ENABLED: v }, false).enabled, false, `DEMO_LOGIN_ENABLED=${JSON.stringify(v)} (dev)`);
+test("resolveDemoLogin: explicit demo opt-in works in production and development", () => {
+  for (const production of [true, false]) {
+    assert.equal(config.resolveDemoLogin({}, production).enabled, false);
+    assert.deepEqual(config.resolveDemoLogin({ DEMO_LOGIN_ENABLED: "true" }, production), { enabled: true, requested: true, blocked: false });
+    for (const value of ["false", "1", "TRUE", " true"]) assert.equal(config.resolveDemoLogin({ DEMO_LOGIN_ENABLED: value }, production).enabled, false);
   }
 });
 
@@ -62,20 +46,11 @@ function loadConfig(overrides) {
   return { ...JSON.parse(r.stdout.trim().split("\n").pop()), stderr: r.stderr };
 }
 
-test("config module: production ignores DEMO_LOGIN_ENABLED=true unless the demo is explicitly isolated", () => {
-  const blocked = loadConfig({ NODE_ENV: "production", DEMO_LOGIN_ENABLED: "true" });
-  assert.deepEqual([blocked.prod, blocked.demo], [true, false]);
-  assert.match(blocked.stderr, /DEMO_LOGIN_ENABLED=true is IGNORED in production/, "the operator is told at startup");
-
-  const onRender = loadConfig({ RENDER: "true", DEMO_LOGIN_ENABLED: "true" });
-  assert.deepEqual([onRender.prod, onRender.demo], [true, false], "RENDER alone counts as production");
-
-  assert.equal(loadConfig({ NODE_ENV: "production" }).demo, false, "production default");
-  assert.equal(loadConfig({ NODE_ENV: "production", DEMO_LOGIN_ENABLED: "false", DEMO_ENVIRONMENT: "isolated" }).demo, false);
-
-  const isolated = loadConfig({ NODE_ENV: "production", DEMO_LOGIN_ENABLED: "true", DEMO_ENVIRONMENT: "isolated" });
-  assert.equal(isolated.demo, true, "a separate, explicitly isolated demo service may enable it");
-  assert.doesNotMatch(isolated.stderr, /IGNORED/);
+test("config module: public demo opt-in works on Render and can be revoked", () => {
+  assert.equal(loadConfig({ NODE_ENV: "production", DEMO_LOGIN_ENABLED: "true" }).demo, true);
+  assert.equal(loadConfig({ RENDER: "true", DEMO_LOGIN_ENABLED: "true" }).demo, true);
+  assert.equal(loadConfig({ NODE_ENV: "production", DEMO_LOGIN_ENABLED: "false" }).demo, false);
+  assert.equal(loadConfig({ NODE_ENV: "production" }).demo, false);
 });
 
 test("config module: production boots without mail, but explicit verification requires a provider", () => {
@@ -108,15 +83,10 @@ test("config module: development behaviour is unchanged", () => {
 
 // ---- deployment files ---------------------------------------------------------------------
 
-test("render.yaml never turns the shared demo login on for the production service", () => {
-  // Comments are explanations, not configuration.
-  const yaml = fs.readFileSync(path.join(REPO, "render.yaml"), "utf8").replace(/^[ 	]*#.*$/gm, "");
-  assert.match(yaml, /key:\s*NODE_ENV\s*\r?\n\s*value:\s*production/, "the blueprint really is the production service (guards this test)");
-  const values = [...yaml.matchAll(/key:\s*DEMO_LOGIN_ENABLED\s*\r?\n\s*value:\s*"?([^"\r\n]+)"?/g)].map((m) => m[1].trim());
-  for (const v of values) assert.equal(v, "false", "DEMO_LOGIN_ENABLED in render.yaml must be false");
-  assert.doesNotMatch(yaml, /key:\s*DEMO_LOGIN_ENABLED\s*\r?\n\s*value:\s*"?true/i);
-  assert.doesNotMatch(yaml, /DEMO_ENVIRONMENT/, "the production blueprint must not carry the isolation marker; that belongs to a separate demo service");
-  assert.doesNotMatch(yaml, /ALLOW_REMOTE_DEV_SEED|ALLOW_DESTRUCTIVE_MIGRATIONS/, "dangerous overrides are not part of the blueprint");
+test("render.yaml enables the public demo without dangerous database overrides", () => {
+  const yaml = fs.readFileSync(path.join(REPO, "render.yaml"), "utf8").replace(/^[ \t]*#.*$/gm, "");
+  assert.match(yaml, /key:\s*DEMO_LOGIN_ENABLED\s*\r?\n\s*value:\s*"true"/);
+  assert.doesNotMatch(yaml, /ALLOW_REMOTE_DEV_SEED|ALLOW_DESTRUCTIVE_MIGRATIONS/);
 });
 
 test("the env template defaults the demo login to off", () => {

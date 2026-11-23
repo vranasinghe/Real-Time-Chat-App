@@ -45,7 +45,7 @@ router.post("/", authenticateToken, eligibility.requireEligible, async (req, res
     const outcome = await db.withTransaction(async (q) => {
       // Only eligible members can be swiped on; anyone else (incomplete, underage, suspended, unknown)
       // looks exactly like a profile that does not exist.
-      const target = await q(`SELECT 1 FROM profiles p WHERE p.id = $1 AND ${eligibility.candidateSql("p")}`, [swipee_id]);
+      const target = await q(`SELECT 1 FROM profiles p WHERE p.id = $1 AND p.is_demo = $2 AND ${eligibility.candidateSql("p")}`, [swipee_id, !!req.account.is_demo]);
       if (target.rows.length === 0) return { unavailable: true };
 
       await q(
