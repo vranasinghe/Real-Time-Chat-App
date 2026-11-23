@@ -78,18 +78,20 @@ test("config module: production ignores DEMO_LOGIN_ENABLED=true unless the demo 
   assert.doesNotMatch(isolated.stderr, /IGNORED/);
 });
 
-test("config module: e-mail verification is mandatory in production and the service refuses to start without a mail provider", () => {
+test("config module: production boots without mail, but explicit verification requires a provider", () => {
   const ok = loadConfig({ NODE_ENV: "production" });
   assert.equal(ok.email, true);
 
   const noMail = loadConfig({ NODE_ENV: "production", RESEND_API_KEY: "", MAIL_FROM: "" });
-  assert.equal(noMail.failed, true, "startup fails closed");
-  assert.match(noMail.stderr, /RESEND_API_KEY and MAIL_FROM are required in production/);
-  assert.equal(loadConfig({ RENDER: "true", RESEND_API_KEY: "" }).failed, true, "RENDER counts as production");
+  assert.equal(noMail.failed, undefined, "missing optional mail does not block startup");
+  assert.equal(noMail.email, false);
+  assert.equal(loadConfig({ RENDER: "true", RESEND_API_KEY: "" }).email, false);
+  const required = loadConfig({ NODE_ENV: "production", RESEND_API_KEY: "", MAIL_FROM: "", REQUIRE_EMAIL_VERIFICATION: "true" });
+  assert.equal(required.failed, true);
+  assert.match(required.stderr, /required when REQUIRE_EMAIL_VERIFICATION=true/);
 
   const switchOff = loadConfig({ NODE_ENV: "production", REQUIRE_EMAIL_VERIFICATION: "false" });
-  assert.equal(switchOff.email, true, "the development switch is ignored in production");
-  assert.match(switchOff.stderr, /REQUIRE_EMAIL_VERIFICATION=false is IGNORED in production/);
+  assert.equal(switchOff.email, false, "production supports explicitly optional verification");
 });
 
 test("config module: outside production verification is on by default and can be switched off for development", () => {

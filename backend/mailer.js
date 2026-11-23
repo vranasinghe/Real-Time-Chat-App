@@ -4,7 +4,7 @@
 //   MAIL_FROM        Verified sender, e.g. "Dateza <no-reply@yourdomain.com>"
 //
 // Without both, email features are DISABLED in production (the endpoints answer 503 and
-// the app skips verification / hides password reset). Outside production the code is
+// onboarding does not require verification by default). Outside production the code is
 // written to the log instead so local development works without an email account.
 
 const config = require("./config");

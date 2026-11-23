@@ -24,7 +24,9 @@ else if (isProduction && jwtSecret.length < 32) errors.push("JWT_SECRET must be 
 if (!env.DATABASE_URL) errors.push("DATABASE_URL is required");
 
 // Origins allowed to call the API / open sockets from a browser. Native apps send no Origin.
-const corsOrigins = list(env.CORS_ORIGIN);
+const corsOrigins = list(env.CORS_ORIGIN || (isProduction
+  ? "https://real-time-chat-app-tau-six.vercel.app,https://real-time-chat-app-odrw.vercel.app"
+  : ""));
 if (corsOrigins.length === 0 && isProduction) {
   warnings.push("CORS_ORIGIN is not set: browsers from any origin can call this API. Set it to your web app URL(s).");
 }
@@ -48,15 +50,14 @@ if (demoLogin.blocked) {
   );
 }
 
-// E-mail verification is mandatory for dating features. Outside production a developer may set
-// REQUIRE_EMAIL_VERIFICATION=false (codes are only logged there anyway). In production the switch is ignored,
-// and the service refuses to start without a mail provider, because nobody could ever become eligible.
-const requireEmailVerification = isProduction ? true : env.REQUIRE_EMAIL_VERIFICATION !== "false";
-if (isProduction && env.REQUIRE_EMAIL_VERIFICATION === "false") {
-  warnings.push("REQUIRE_EMAIL_VERIFICATION=false is IGNORED in production: e-mail verification is mandatory.");
-}
-if (isProduction && !(env.RESEND_API_KEY && env.MAIL_FROM)) {
-  errors.push("RESEND_API_KEY and MAIL_FROM are required in production: e-mail verification is mandatory, so without a mail provider no member could become eligible");
+// Production can run without an email provider. Verification is optional in that mode;
+// never mark an unverified address as verified. An explicit true still requires delivery.
+const mailConfigured = !!(env.RESEND_API_KEY && env.MAIL_FROM);
+const requireEmailVerification = env.REQUIRE_EMAIL_VERIFICATION === "false" ? false
+  : env.REQUIRE_EMAIL_VERIFICATION === "true" ? true
+    : isProduction ? mailConfigured : true;
+if (isProduction && requireEmailVerification && !mailConfigured) {
+  errors.push("RESEND_API_KEY and MAIL_FROM are required when REQUIRE_EMAIL_VERIFICATION=true in production");
 }
 
 const config = {
